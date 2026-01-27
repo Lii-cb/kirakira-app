@@ -1,5 +1,10 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
+import { DailyAttendanceList } from "@/components/admin/daily-attendance-list";
 import { seedChildren, ensureAttendanceRecords, getChildren } from "@/lib/firestore";
+
+export const dynamic = "force-dynamic";
 
 export default function AdminDashboardPage() {
     const handleSeed = async () => {

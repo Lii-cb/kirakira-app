@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "firebase use --add": "kirakira-app-cc454",
+    "default": "kirakira-app-cc454"
+  },
+  "targets": {},
+  "etags": {}
+}
