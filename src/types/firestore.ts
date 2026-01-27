@@ -1,0 +1,69 @@
+import { Timestamp } from "firebase/firestore";
+
+export type Role = "admin" | "staff" | "guardian";
+
+export interface UserProfile {
+    uid: string;
+    email: string | null;
+    fullName: string | null;
+    role: Role;
+    guardianId?: string; // Link to guardian profile if needed
+    createdAt: Timestamp;
+}
+
+export interface Child {
+    id: string; // Document ID
+    name: string;
+    kana: string;
+    className: string; // e.g. "1-1"
+    grade: number; // 1-6
+    guardianId?: string; // ID of the primary guardian
+    defaultReturnMethod?: string; // "お迎え" etc.
+}
+
+export interface AttendanceRecord {
+    id: string; // Document ID
+    date: string; // "YYYY-MM-DD"
+    childId: string;
+    childName: string; // Denormalized for display
+    className: string; // Denormalized
+    status: "pending" | "arrived" | "left" | "absent";
+    arrivalTime?: string | null; // "HH:mm"
+    departureTime?: string | null; // "HH:mm"
+    reservationTime: string; // "14:00-17:00"
+    returnMethod: string;
+    returnDetails?: string | null;
+    memo?: string;
+
+    // Request logic
+    changeRequest?: {
+        type: "absence" | "returnMethod" | "pickupTime";
+        value: string; // e.g., "newMethod" or "HH:mm"
+        memo?: string;
+        status: "pending" | "approved" | "rejected";
+    };
+}
+
+export interface Reservation {
+    id: string;
+    childId: string;
+    date: string; // "YYYY-MM-DD"
+    time: string; // "14:00-17:00"
+    status: "pending" | "confirmed" | "rejected";
+    createdAt: any; // Timestamp or FieldValue
+}
+
+export interface Application {
+    id: string;
+    childLastName: string;
+    childFirstName: string;
+    childLastNameKana: string;
+    childFirstNameKana: string;
+    grade: string;
+    guardianLastName: string;
+    guardianFirstName: string;
+    phone: string;
+    email: string;
+    status: "new" | "processed";
+    submissionDate: any;
+}
