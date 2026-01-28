@@ -69,3 +69,15 @@ export interface Application {
     status: "new" | "processed";
     submissionDate: any;
 }
+
+export interface StaffNotification {
+    id: string;
+    type: "pickup_request";
+    childId: string;
+    childName: string;
+    senderId: string;
+    status: "pending" | "acknowledged" | "completed";
+    reply?: string; // "アリーナ", "外", "探します" etc
+    createdAt: any;
+    active: boolean;
+}

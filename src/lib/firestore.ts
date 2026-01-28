@@ -202,3 +202,42 @@ export const getReservationsForChild = async (childId: string): Promise<Reservat
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
 };
+
+// --- Staff Notifications ---
+
+import { StaffNotification } from "@/types/firestore";
+
+export const sendPickupNotification = async (childId: string, childName: string, senderId: string = "Reception") => {
+    await addDoc(collection(db, "notifications"), {
+        type: "pickup_request",
+        childId,
+        childName,
+        senderId,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        active: true
+    });
+};
+
+export const subscribeNotifications = (callback: (notifications: StaffNotification[]) => void) => {
+    // Listen for active notifications
+    const q = query(collection(db, "notifications"), where("active", "==", true), orderBy("createdAt", "asc"));
+    return onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffNotification));
+        callback(items);
+    });
+};
+
+export const updateNotificationReply = async (id: string, reply: string) => {
+    await updateDoc(doc(db, "notifications", id), {
+        status: "acknowledged",
+        reply
+    });
+};
+
+export const completeNotification = async (id: string) => {
+    await updateDoc(doc(db, "notifications", id), {
+        active: false,
+        status: "completed"
+    });
+};

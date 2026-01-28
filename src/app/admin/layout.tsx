@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut } from "lucide-react";
+import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
+import { StaffNotificationToast } from "@/components/admin/staff-notification-toast";
 
 export default function AdminLayout({
     children,
@@ -58,10 +60,13 @@ export default function AdminLayout({
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden mb-16 md:mb-0">
-                {/* Mobile Header (TODO) */}
-                <div className="flex-1 overflow-auto p-4 md:p-8">
-                    {children}
-                </div>
+                <StaffNotificationProvider>
+                    {/* Mobile Header (TODO) */}
+                    <div className="flex-1 overflow-auto p-4 md:p-8">
+                        {children}
+                    </div>
+                    <StaffNotificationToast />
+                </StaffNotificationProvider>
             </main>
 
             {/* Bottom Navigation (Mobile) */}

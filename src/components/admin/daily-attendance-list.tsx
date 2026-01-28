@@ -27,11 +27,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Search, ArrowUpDown, User, Bus, Footprints, Users as UsersIcon } from "lucide-react";
+import { Search, ArrowUpDown, User, Bus, Footprints, Users as UsersIcon, Megaphone } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AttendanceRecord } from "@/types/firestore";
 import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
+import { useStaffNotifications } from "@/contexts/staff-notification-context";
 
 // Generate Time Options
 const generateTimeOptions = () => {
@@ -73,6 +74,7 @@ export function DailyAttendanceList() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' } | null>(null);
+    const { sendCall } = useStaffNotifications();
 
     // Initial Data Fetch & Subscription
     useEffect(() => {
@@ -328,7 +330,22 @@ export function DailyAttendanceList() {
                                         </TableCell>
                                         <TableCell className="px-2 font-medium text-xs text-center">{child.className}</TableCell>
                                         <TableCell className="px-2 text-sm font-medium truncate max-w-[90px]" title={child.childName}>
-                                            {child.childName}
+                                            <div className="flex items-center justify-between gap-1">
+                                                <span>{child.childName}</span>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 text-orange-400 hover:text-orange-600 hover:bg-orange-50 shrink-0"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (confirm(`${child.childName}さんの呼び出しを行いますか？`)) {
+                                                            sendCall(child.childId, child.childName);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Megaphone className="h-3 w-3" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="px-2 text-center">
                                             <div className="flex justify-center">
