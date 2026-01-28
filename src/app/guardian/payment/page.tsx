@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, CreditCard, Clock, Loader2 } from "lucide-react";
+import { Download, CreditCard, Clock, Loader2, Wallet } from "lucide-react";
 import { getReservationsForChild } from "@/lib/firestore";
 import { Reservation } from "@/types/firestore";
 
@@ -43,11 +43,6 @@ export default function GuardianPaymentPage() {
 
     const totalFee = thisMonthReservations.reduce((sum, r) => sum + (r.fee || 0), 0);
     const snackFee = thisMonthReservations.filter(r => r.hasSnack).length * 100;
-    // Assuming 'fee' includes snack fee, we should separate them for display if needed.
-    // In reserve page: dayFee = basic + snack + extra.
-    // So totalFee is the grand total.
-    // We can estimate 'Basic' vs 'Extra' roughly.
-    // Let's explicitly calculate snack portion for display.
     const basicAndExtra = totalFee - snackFee;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
@@ -100,13 +95,19 @@ export default function GuardianPaymentPage() {
 
                 </CardContent>
                 <CardFooter className="flex flex-col gap-2 bg-gray-50/50 pt-4 pb-6">
-                    <Button className="w-full h-12 text-lg font-bold shadow-md" disabled={totalFee === 0}>
-                        <CreditCard className="mr-2 h-5 w-5" />
-                        オンラインで支払う
+                    <Button
+                        className="w-full h-12 text-lg font-bold shadow-md bg-green-600 hover:bg-green-700"
+                        disabled={totalFee === 0}
+                        onClick={() => {
+                            if (confirm("職員に現金を渡して、支払いを完了しますか？")) {
+                                alert("支払いを申請しました。職員の承認をお待ちください。");
+                            }
+                        }}
+                    >
+                        <Wallet className="mr-2 h-5 w-5" />
+                        支払う
                     </Button>
-                    <p className="text-[10px] text-center text-muted-foreground">
-                        ※ 金額は月末に確定します。現在表示等は概算です。
-                    </p>
+                    {/* Note hidden as requested */}
                 </CardFooter>
             </Card>
 

@@ -22,8 +22,11 @@ export default function GuardianLayout({
     return (
         <div className="flex min-h-screen flex-col bg-gray-50 pb-16 md:pb-0">
             {/* Header */}
-            <header className="bg-white border-b p-4 sticky top-0 z-10">
-                <h1 className="text-lg font-bold text-center text-primary">KiraKira</h1>
+            <header className="bg-white border-b p-4 sticky top-0 z-10 flex justify-between items-center bg-opacity-90 backdrop-blur-sm">
+                <h1 className="text-lg font-bold text-primary">KiraKira</h1>
+                <Link href="/admin/dashboard" className="text-[10px] text-gray-400 hover:text-gray-600 border px-2 py-1 rounded hover:bg-gray-50">
+                    管理者画面へ
+                </Link>
             </header>
 
             {/* Main Content */}
