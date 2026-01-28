@@ -5,6 +5,7 @@ import {
     getDocs,
     setDoc,
     updateDoc,
+    deleteDoc,
     query,
     where,
     onSnapshot,
@@ -148,18 +149,26 @@ export const submitApplication = async (data: Omit<Application, "id" | "status" 
     });
 };
 
+export const addChild = async (childData: Child) => {
+    // Ensure ID
+    if (!childData.id) {
+        childData.id = `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    }
+    await setDoc(doc(db, "children", childData.id), childData);
+    return childData.id;
+};
+
 export const processApplication = async (app: Application) => {
     // 1. Create Child Document
-    const childId = `child-${Date.now()}`; // Simple ID generation
     const newChild: Child = {
-        id: childId,
+        id: `child-${Date.now()}`,
         name: `${app.childLastName} ${app.childFirstName}`,
         kana: `${app.childLastNameKana} ${app.childFirstNameKana}`,
         className: "", // To be assigned later
         grade: parseInt(app.grade, 10),
         defaultReturnMethod: "お迎え" // Default
     };
-    await setDoc(doc(db, "children", childId), newChild);
+    await addChild(newChild);
 
     // 2. Update Application Status
     await updateDoc(doc(db, "applications", app.id), {
@@ -201,6 +210,14 @@ export const getReservationsForChild = async (childId: string): Promise<Reservat
     const q = query(collection(db, "reservations"), where("childId", "==", childId), orderBy("date", "desc"));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+};
+
+export const cancelReservation = async (id: string) => {
+    await deleteDoc(doc(db, "reservations", id));
+};
+
+export const updateReservation = async (id: string, data: Partial<Reservation>) => {
+    await updateDoc(doc(db, "reservations", id), data);
 };
 
 // --- Staff Notifications ---

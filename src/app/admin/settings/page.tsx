@@ -39,6 +39,42 @@ export default function AdminSettingsPage() {
 
                 <Card>
                     <CardHeader>
+                        <CardTitle>外部連携（スプレッドシート自動同期）</CardTitle>
+                        <CardDescription>Googleスプレッドシートとの自動連携設定</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">APIエンドポイント</Label>
+                                <div className="font-mono text-sm break-all bg-white border p-2 rounded">
+                                    https://kirakira-app-cc454.web.app/api/children
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">APIシークレット</Label>
+                                <div className="font-mono text-sm break-all bg-white border p-2 rounded">
+                                    kirakira-api-key-2026
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                            <p>本システムはサーバーレス構成のため、Google Apps Scriptから直接データベースを読み取る方式を採用しています。</p>
+                            <p className="mt-2 font-bold">連携手順:</p>
+                            <ol className="list-decimal list-inside ml-2 space-y-1 mt-1">
+                                <li>詳細手順書を開く</li>
+                                <li>スプレッドシートに「Firestore for Google Apps Script」ライブラリを追加</li>
+                                <li>Firebaseコンソールから「サービスアカウントキー(JSON)」を取得</li>
+                                <li>スクリプトにキーを貼り付けて実行</li>
+                            </ol>
+                        </div>
+                        <Button variant="outline" className="w-full" onClick={() => window.open('/SPREADSHEET_INTEGRATION.md', '_blank')}>
+                            詳細な手順書を開く
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
                         <CardTitle>システム設定</CardTitle>
                         <CardDescription>通知や機能のオンオフ</CardDescription>
                     </CardHeader>

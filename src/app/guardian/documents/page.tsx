@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Download, ChevronRight } from "lucide-react";
 
@@ -44,8 +45,8 @@ export default function GuardianDocumentsPage() {
             </div>
 
             <div className="px-2 mt-8">
-                <h3 className="font-semibold text-lg mb-3">提出書類</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <h3 className="font-semibold text-lg mb-3">書類のダウンロード</h3>
+                <div className="grid grid-cols-2 gap-3 mb-6">
                     <Card className="hover:bg-blue-50 cursor-pointer border-dashed">
                         <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
                             <Download className="h-8 w-8 text-blue-500" />
@@ -59,6 +60,20 @@ export default function GuardianDocumentsPage() {
                         </CardContent>
                     </Card>
                 </div>
+
+                <h3 className="font-semibold text-lg mb-3">提出について</h3>
+                <Card className="bg-gray-50 border-gray-200">
+                    <CardContent className="p-4 space-y-3">
+                        <p className="text-sm text-gray-700">
+                            記入済みの書類は、以下のボタンからメールに添付して送信してください。<br />
+                            <span className="text-xs text-muted-foreground">※ カメラで撮影した画像でも受付け可能です。</span>
+                        </p>
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => window.location.href = "mailto:staff@kirakira.example.com?subject=書類提出（児童名）&body=添付ファイルにて書類を提出します。"}>
+                            <FileText className="mr-2 h-4 w-4" />
+                            メールで提出する
+                        </Button>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );

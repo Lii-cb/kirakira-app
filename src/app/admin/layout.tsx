@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings } from "lucide-react";
 import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
 import { StaffNotificationToast } from "@/components/admin/staff-notification-toast";
 
@@ -22,6 +22,7 @@ export default function AdminLayout({
         { href: "/admin/users", label: "児童・利用者", icon: Users },
         { href: "/admin/finance", label: "金銭管理", icon: Banknote },
         { href: "/admin/documents", label: "書類管理", icon: FileText },
+        { href: "/admin/settings", label: "設定", icon: Settings },
     ];
 
     return (

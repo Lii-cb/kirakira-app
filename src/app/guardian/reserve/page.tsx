@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { submitReservations, getReservationsForChild } from "@/lib/firestore";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { submitReservations, getReservationsForChild, cancelReservation } from "@/lib/firestore";
 import { Reservation } from "@/types/firestore";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 
 export default function GuardianReservePage() {
     const [dates, setDates] = useState<Date[] | undefined>([]);
@@ -18,14 +20,29 @@ export default function GuardianReservePage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reservations, setReservations] = useState<Reservation[]>([]);
 
+    // Dialog State
+    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+
     useEffect(() => {
-        const fetchHistory = async () => {
-            // Mock Child ID for MVP - in real app this comes from auth context
-            const data = await getReservationsForChild("child-1");
-            setReservations(data);
-        };
         fetchHistory();
     }, []);
+
+    const fetchHistory = async () => {
+        const data = await getReservationsForChild("child-1");
+        setReservations(data);
+    };
+
+    // Derived State for Calendar
+    const bookedDates = reservations.map(r => new Date(r.date.replaceAll('-', '/')));
+
+    const isDateDisabled = (date: Date) => {
+        return bookedDates.some(booked =>
+            booked.getFullYear() === date.getFullYear() &&
+            booked.getMonth() === date.getMonth() &&
+            booked.getDate() === date.getDate()
+        );
+    };
 
     // Fee Calculation
     const daysCount = dates?.length || 0;
@@ -48,7 +65,6 @@ export default function GuardianReservePage() {
             const timeLabel = selectedTime === "standard" ? "14:00-17:00" :
                 selectedTime === "extended" ? "14:00-18:00" : "15:00-18:00";
 
-            // Calculate fee for one day (assuming same for all selected days)
             const dayFee = basicFee + snackFeePerDay + extraFeePerDay;
 
             await submitReservations(childId, dates, timeLabel, {
@@ -58,15 +74,38 @@ export default function GuardianReservePage() {
 
             alert(`${daysCount}件の予約リクエストを送信しました。\n予定利用料: ${totalEstimatedFee}円`);
             setDates([]);
-            // Refresh history
-            const data = await getReservationsForChild("child-1");
-            setReservations(data);
+            fetchHistory();
         } catch (error) {
             console.error(error);
             alert("予約に失敗しました。");
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleCancelReservation = async () => {
+        if (!selectedReservation) return;
+        if (!confirm("本当にこの予約を取り消しますか？")) return;
+
+        try {
+            await cancelReservation(selectedReservation.id);
+            alert("予約を取り消しました。");
+            setIsDialogOpen(false);
+            fetchHistory();
+        } catch (error) {
+            console.error(error);
+            alert("取り消しに失敗しました。");
+        }
+    };
+
+    const handleCalendarSelect = (newDates: Date[] | undefined) => {
+        if (!newDates) {
+            setDates([]);
+            return;
+        }
+        // Helper to filter out disabled dates if they somehow get selected (though 'disabled' prop should prevent this)
+        // Actually, we use 'disabled' prop to prevent selecting booked dates.
+        setDates(newDates);
     };
 
     return (
@@ -76,120 +115,153 @@ export default function GuardianReservePage() {
             <Card>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-md">新規予約 (複数選択可)</CardTitle>
+                    <CardDescription>
+                        日付をタップして選択してください。<br />
+                        <span className="text-red-500 text-xs">● 予約済み</span> /
+                        <span className="text-blue-500 text-xs ml-2">● 選択中</span>
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 flex flex-col items-center">
                     <div className="p-2 border rounded-md">
                         <Calendar
                             mode="multiple"
                             selected={dates}
-                            onSelect={setDates}
+                            onSelect={handleCalendarSelect}
                             className="rounded-md"
+                            disabled={isDateDisabled}
+                            modifiers={{
+                                booked: bookedDates
+                            }}
+                            modifiersStyles={{
+                                booked: {
+                                    textDecoration: "underline",
+                                    fontWeight: "bold",
+                                    color: "#ef4444" // red-500
+                                }
+                            }}
                         />
                     </div>
 
-                    <div className="w-full bg-blue-50 p-4 rounded-lg text-blue-900 space-y-2">
-                        <div className="flex justify-between items-center text-sm">
-                            <span>選択日数:</span>
-                            <span className="font-bold">{daysCount} 日</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm border-t border-blue-200 pt-2">
-                            <span>基本料金:</span>
-                            <span>0円</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span>おやつ代 (100円/回):</span>
-                            <span>{snackFeePerDay * daysCount}円</span>
-                        </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span>延長料金 (100円/回):</span>
-                            <span>{extraFeePerDay * daysCount}円</span>
-                        </div>
-                        <div className="flex justify-between items-center font-bold text-lg border-t border-blue-200 pt-2 mt-1">
-                            <span>合計見積:</span>
-                            <span>{totalEstimatedFee}円</span>
-                        </div>
-                        <div className="text-[10px] text-blue-700 mt-1">
-                            ※ キャンセル時の返金はありません（おやつのみお返しします）。<br />
-                            ※ 追加料金は2ヶ月後に徴収されます。
-                        </div>
-                    </div>
+                    {/* Booking Form (Only show if dates selected) */}
+                    {daysCount > 0 && (
+                        <div className="w-full space-y-4 animate-in fade-in slide-in-from-top-2">
+                            <div className="bg-blue-50 p-4 rounded-lg text-blue-900 space-y-2">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span>選択日数:</span>
+                                    <span className="font-bold">{daysCount} 日</span>
+                                </div>
+                                <div className="flex justify-between items-center font-bold text-lg border-t border-blue-200 pt-2 mt-1">
+                                    <span>合計見積:</span>
+                                    <span>{totalEstimatedFee}円</span>
+                                </div>
+                            </div>
 
-                    <div className="w-full space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">希望時間</label>
-                            <Select value={selectedTime} onValueChange={setSelectedTime}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="時間を選択" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="standard">標準 (14:00-17:00)</SelectItem>
-                                    <SelectItem value="extended">延長 (14:00-18:00) +100円</SelectItem>
-                                    <SelectItem value="late">遅め (15:00-18:00) +100円</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">希望時間</label>
+                                <Select value={selectedTime} onValueChange={setSelectedTime}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="時間を選択" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="standard">標準 (14:00-17:00)</SelectItem>
+                                        <SelectItem value="extended">延長 (14:00-18:00) +100円</SelectItem>
+                                        <SelectItem value="late">遅め (15:00-18:00) +100円</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex items-center space-x-2 border p-3 rounded-md">
+                                <Checkbox
+                                    id="snack"
+                                    checked={wantsSnack}
+                                    onCheckedChange={(c: boolean | "indeterminate") => setWantsSnack(!!c)}
+                                />
+                                <label
+                                    htmlFor="snack"
+                                    className="text-sm font-medium leading-none"
+                                >
+                                    おやつを希望する (+100円)
+                                </label>
+                            </div>
+                            <Button className="w-full font-bold" onClick={handleReserve} disabled={isSubmitting}>
+                                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "予約リクエストを送信"}
+                            </Button>
                         </div>
-
-                        <div className="flex items-center space-x-2 border p-3 rounded-md">
-                            <Checkbox
-                                id="snack"
-                                checked={wantsSnack}
-                                onCheckedChange={(c: boolean | "indeterminate") => setWantsSnack(!!c)}
-                            />
-                            <label
-                                htmlFor="snack"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                                おやつを希望する (+100円)
-                            </label>
-                        </div>
-                    </div>
-
-                    <Button className="w-full font-bold" onClick={handleReserve} disabled={!dates || dates.length === 0 || isSubmitting}>
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "予約リクエストを送信"}
-                    </Button>
+                    )}
                 </CardContent>
             </Card>
 
             <div className="space-y-2 px-2">
                 <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">予約状況一覧</h3>
-                    <div className="text-xs text-muted-foreground">{reservations.length}件</div>
+                    <h3 className="font-semibold text-lg">現在の予約状況</h3>
+                    <div className="text-xs text-muted-foreground">タップして詳細・取消</div>
                 </div>
 
                 <div className="bg-white rounded-md border shadow-sm overflow-hidden">
                     <div className="grid grid-cols-4 bg-gray-100 p-2 text-xs font-medium text-gray-500 text-center">
                         <div>日付</div>
-                        <div>時間/料金</div>
-                        <div>オプション</div>
+                        <div>時間</div>
+                        <div>おやつ</div>
                         <div>状況</div>
                     </div>
                     <div className="divide-y max-h-[300px] overflow-y-auto">
-                        {reservations.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-gray-500 col-span-4">予約履歴はありません</div>
-                        ) : (
-                            reservations.map((res) => (
-                                <div key={res.id} className="grid grid-cols-4 p-3 items-center text-sm hover:bg-gray-50">
-                                    <div className="text-center font-bold text-gray-800 text-xs">
-                                        {res.date}
-                                    </div>
-                                    <div className="text-center text-xs">
-                                        <div>{res.time}</div>
-                                        <div className="text-muted-foreground">{res.fee ? `¥${res.fee}` : "-"}</div>
-                                    </div>
-                                    <div className="text-center text-xs text-muted-foreground">
-                                        {res.hasSnack ? "おやつ有" : "-"}
-                                    </div>
-                                    <div className="flex justify-center">
-                                        <Badge variant={res.status === "confirmed" ? "secondary" : "outline"} className={res.status === "confirmed" ? "bg-green-100 text-green-700" : ""}>
-                                            {res.status === "confirmed" ? "確定" : res.status === "rejected" ? "不可" : "申請中"}
-                                        </Badge>
-                                    </div>
+                        {reservations.map((res) => (
+                            <div
+                                key={res.id}
+                                className="grid grid-cols-4 p-3 items-center text-sm hover:bg-gray-50 cursor-pointer active:bg-gray-100"
+                                onClick={() => {
+                                    setSelectedReservation(res);
+                                    setIsDialogOpen(true);
+                                }}
+                            >
+                                <div className="text-center font-bold text-gray-800 text-xs">{res.date}</div>
+                                <div className="text-center text-xs">{res.time}</div>
+                                <div className="text-center text-xs text-muted-foreground">{res.hasSnack ? "有" : "-"}</div>
+                                <div className="flex justify-center">
+                                    <Badge variant={res.status === "confirmed" ? "secondary" : "outline"} className={res.status === "confirmed" ? "bg-green-100 text-green-700" : ""}>
+                                        {res.status === "confirmed" ? "確定" : "申請中"}
+                                    </Badge>
                                 </div>
-                            ))
-                        )}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
+
+            {/* Details Dialog */}
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>予約詳細</DialogTitle>
+                        <DialogDescription>
+                            予約内容の確認、または取り消しを行えます。
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedReservation && (
+                        <div className="space-y-4 py-2">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                <span className="text-muted-foreground">日付:</span>
+                                <span className="font-bold">{selectedReservation.date}</span>
+
+                                <span className="text-muted-foreground">利用時間:</span>
+                                <span>{selectedReservation.time}</span>
+
+                                <span className="text-muted-foreground">おやつ:</span>
+                                <span>{selectedReservation.hasSnack ? "あり" : "なし"}</span>
+
+                                <span className="text-muted-foreground">ステータス:</span>
+                                <Badge variant="outline">{selectedReservation.status}</Badge>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="flex sm:justify-between gap-2">
+                        <Button variant="destructive" onClick={handleCancelReservation} className="w-full sm:w-auto">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            予約を取り消す
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">閉じる</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

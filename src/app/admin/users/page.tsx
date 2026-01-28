@@ -1,38 +1,134 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { getChildren } from "@/lib/firestore";
+import { Button } from "@/components/ui/button";
+import { getChildren, addChild } from "@/lib/firestore";
 import { Child } from "@/types/firestore";
-import { Loader2, User } from "lucide-react";
+import { Loader2, Download, Upload, FileUp } from "lucide-react";
 
 export default function AdminUsersPage() {
     const [children, setChildren] = useState<Child[]>([]);
     const [loading, setLoading] = useState(true);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const fetchChildren = async () => {
+        setLoading(true);
+        try {
+            const data = await getChildren();
+            setChildren(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchChildren = async () => {
-            try {
-                const data = await getChildren();
-                setChildren(data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchChildren();
     }, []);
 
+    // CSV Export
+    const handleExport = () => {
+        const header = "学年,クラス,氏名,かな,帰宅方法(お迎え/集団下校/バス/徒歩)\n";
+        const rows = children.map(c =>
+            `${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod}`
+        ).join("\n");
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), header + rows], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `児童名簿_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+    };
+
+    // CSV Import
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!confirm("CSVファイルからデータをインポートしますか？\n※ 既存のデータに追加されます。")) {
+            e.target.value = "";
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target?.result as string;
+            const lines = text.split(/\r\n|\n/);
+            // Skip header if it contains specific keywords, or just assume first line is header if desired. 
+            // Here, trusting user follows format. Simple implementation:
+
+            let count = 0;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                // Skip header based on content detection
+                if (line.includes("氏名") && line.includes("学年")) continue;
+
+                const cols = line.split(",");
+                if (cols.length < 4) continue; // Basic validation
+
+                const [grade, className, name, kana, method] = cols;
+
+                try {
+                    await addChild({
+                        id: "", // generated
+                        grade: parseInt(grade) || 1,
+                        className: className?.trim() || "",
+                        name: name?.trim() || "",
+                        kana: kana?.trim() || "",
+                        defaultReturnMethod: (method?.trim() as any) || "お迎え"
+                    });
+                    count++;
+                } catch (err) {
+                    console.error("Import error line " + i, err);
+                }
+            }
+            alert(`${count}件のデータをインポートしました。`);
+            fetchChildren(); // Refresh
+            e.target.value = ""; // Reset input
+        };
+        reader.readAsText(file);
+    };
+
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-bold tracking-tight">児童・利用者名簿</h2>
+            <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-bold tracking-tight">児童・利用者名簿</h2>
+                <div className="flex gap-2">
+                    <input
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                    />
+                    <Button variant="outline" onClick={handleImportClick}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        CSVインポート
+                    </Button>
+                    <Button variant="outline" onClick={handleExport}>
+                        <Download className="mr-2 h-4 w-4" />
+                        CSVエクスポート
+                    </Button>
+                </div>
+            </div>
+
             <Card>
                 <CardHeader>
                     <CardTitle>登録児童一覧</CardTitle>
-                    <CardDescription>現在登録されている児童の名簿です。</CardDescription>
+                    <CardDescription>
+                        現在登録されている児童の名簿です。<br />
+                        CSVフォーマット: 学年, クラス, 氏名, かな, 帰宅方法
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
