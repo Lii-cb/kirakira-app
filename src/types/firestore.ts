@@ -50,6 +50,8 @@ export interface Reservation {
     date: string; // "YYYY-MM-DD"
     time: string; // "14:00-17:00"
     status: "pending" | "confirmed" | "rejected";
+    fee?: number;
+    hasSnack?: boolean;
     createdAt: any; // Timestamp or FieldValue
 }
 

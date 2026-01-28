@@ -4,14 +4,13 @@
         "indexes": "firestore.indexes.json"
     },
     "hosting": {
-        "source": ".",
+        "public": "out",
         "ignore": [
             "firebase.json",
             "**/.*",
             "**/node_modules/**"
         ],
-        "frameworksBackend": {
-            "region": "asia-northeast1"
-        }
+        "cleanUrls": true,
+        "trailingSlash": false
     }
 }

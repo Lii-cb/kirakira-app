@@ -171,7 +171,7 @@ export const processApplication = async (app: Application) => {
 
 // --- Reservations ---
 
-export const submitReservations = async (childId: string, dates: Date[], time: string) => {
+export const submitReservations = async (childId: string, dates: Date[], time: string, options?: { fee: number, hasSnack: boolean }) => {
     const promises = dates.map(date => {
         const dateStr = date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-');
         return addDoc(collection(db, "reservations"), {
@@ -179,6 +179,8 @@ export const submitReservations = async (childId: string, dates: Date[], time: s
             date: dateStr,
             time,
             status: "pending",
+            fee: options?.fee || 0,
+            hasSnack: options?.hasSnack || false,
             createdAt: serverTimestamp()
         });
     });
@@ -193,4 +195,10 @@ export const getReservations = async (date: string): Promise<Reservation[]> => {
 
 export const updateReservationStatus = async (id: string, status: "confirmed" | "rejected") => {
     await updateDoc(doc(db, "reservations", id), { status });
+};
+
+export const getReservationsForChild = async (childId: string): Promise<Reservation[]> => {
+    const q = query(collection(db, "reservations"), where("childId", "==", childId), orderBy("date", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
 };

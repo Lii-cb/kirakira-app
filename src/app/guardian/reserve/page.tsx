@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { submitReservations } from "@/lib/firestore";
+import { submitReservations, getReservationsForChild } from "@/lib/firestore";
+import { Reservation } from "@/types/firestore";
 import { Loader2 } from "lucide-react";
 
 export default function GuardianReservePage() {
@@ -15,11 +16,16 @@ export default function GuardianReservePage() {
     const [selectedTime, setSelectedTime] = useState("standard");
     const [wantsSnack, setWantsSnack] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
 
-    // Mock History (for MVP)
-    const [reservations, setReservations] = useState([
-        { id: 1, date: "2026-01-20", status: "confirmed", time: "14:00-17:00" },
-    ]);
+    useEffect(() => {
+        const fetchHistory = async () => {
+            // Mock Child ID for MVP - in real app this comes from auth context
+            const data = await getReservationsForChild("child-1");
+            setReservations(data);
+        };
+        fetchHistory();
+    }, []);
 
     // Fee Calculation
     const daysCount = dates?.length || 0;
@@ -38,27 +44,23 @@ export default function GuardianReservePage() {
 
         setIsSubmitting(true);
         try {
-            // Mock Child ID
             const childId = "child-1";
             const timeLabel = selectedTime === "standard" ? "14:00-17:00" :
                 selectedTime === "extended" ? "14:00-18:00" : "15:00-18:00";
 
-            // Add metadata about fees? 
-            // Currently submitReservations only takes (childId, dates, time).
-            // We might need to update the definition later to include 'wantsSnack'.
-            // For now, adhering to the existing signature, or updating it if needed. 
-            // Let's assume Time implies Extra, but Snack is missing.
-            // I'll append Snack info to 'time' string or change function? 
-            // Changing function is better but risk breaking others.
-            // I'll stick to basic submitting for now and maybe comment that 'snack' is implicit or TODO.
-            // Actually, user wants "Fee calculated at reservation".
-            // So we should probably save this info.
-            // I will proceed with submitReservations and just pass the time for now.
+            // Calculate fee for one day (assuming same for all selected days)
+            const dayFee = basicFee + snackFeePerDay + extraFeePerDay;
 
-            await submitReservations(childId, dates, timeLabel);
+            await submitReservations(childId, dates, timeLabel, {
+                fee: dayFee,
+                hasSnack: wantsSnack
+            });
 
             alert(`${daysCount}件の予約リクエストを送信しました。\n予定利用料: ${totalEstimatedFee}円`);
             setDates([]);
+            // Refresh history
+            const data = await getReservationsForChild("child-1");
+            setReservations(data);
         } catch (error) {
             console.error(error);
             alert("予約に失敗しました。");
@@ -155,25 +157,32 @@ export default function GuardianReservePage() {
                 </div>
 
                 <div className="bg-white rounded-md border shadow-sm overflow-hidden">
-                    <div className="grid grid-cols-3 bg-gray-100 p-2 text-xs font-medium text-gray-500 text-center">
+                    <div className="grid grid-cols-4 bg-gray-100 p-2 text-xs font-medium text-gray-500 text-center">
                         <div>日付</div>
-                        <div>時間</div>
+                        <div>時間/料金</div>
+                        <div>オプション</div>
                         <div>状況</div>
                     </div>
                     <div className="divide-y max-h-[300px] overflow-y-auto">
                         {reservations.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-gray-500">予約履歴はありません</div>
+                            <div className="p-4 text-center text-sm text-gray-500 col-span-4">予約履歴はありません</div>
                         ) : (
                             reservations.map((res) => (
-                                <div key={res.id} className="grid grid-cols-3 p-3 items-center text-sm hover:bg-gray-50">
-                                    <div className="text-center font-bold text-gray-800">
+                                <div key={res.id} className="grid grid-cols-4 p-3 items-center text-sm hover:bg-gray-50">
+                                    <div className="text-center font-bold text-gray-800 text-xs">
                                         {res.date}
                                     </div>
-                                    <div className="text-center text-muted-foreground text-xs">
-                                        {res.time}
+                                    <div className="text-center text-xs">
+                                        <div>{res.time}</div>
+                                        <div className="text-muted-foreground">{res.fee ? `¥${res.fee}` : "-"}</div>
+                                    </div>
+                                    <div className="text-center text-xs text-muted-foreground">
+                                        {res.hasSnack ? "おやつ有" : "-"}
                                     </div>
                                     <div className="flex justify-center">
-                                        <Badge variant="secondary" className="bg-green-100 text-green-700">確定</Badge>
+                                        <Badge variant={res.status === "confirmed" ? "secondary" : "outline"} className={res.status === "confirmed" ? "bg-green-100 text-green-700" : ""}>
+                                            {res.status === "confirmed" ? "確定" : res.status === "rejected" ? "不可" : "申請中"}
+                                        </Badge>
                                     </div>
                                 </div>
                             ))
