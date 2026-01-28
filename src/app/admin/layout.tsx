@@ -21,6 +21,7 @@ export default function AdminLayout({
         { href: "/admin/calendar", label: "予約台帳", icon: Calendar },
         { href: "/admin/users", label: "児童・利用者", icon: Users },
         { href: "/admin/finance", label: "金銭管理", icon: Banknote },
+        { href: "/admin/documents", label: "書類管理", icon: FileText },
     ];
 
     return (
