@@ -73,7 +73,10 @@ export function DailyAttendanceList() {
     const [selectedChild, setSelectedChild] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' } | null>(null);
+
+    // Sort Conf (Default to Status ASC)
+    const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' }>({ key: 'status', direction: 'asc' });
+
     const { sendCall } = useStaffNotifications();
 
     // Initial Data Fetch & Subscription
@@ -97,9 +100,9 @@ export function DailyAttendanceList() {
         return { totalEnrolled, totalRegistered, scheduled, present, left, absent };
     }, [children]);
 
-    const handleSort = (key: keyof AttendanceRecord) => {
+    const handleSortCol = (key: keyof AttendanceRecord) => {
         let direction: 'asc' | 'desc' = 'asc';
-        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
             direction = 'desc';
         }
         setSortConfig({ key, direction });
@@ -107,22 +110,37 @@ export function DailyAttendanceList() {
 
     const sortedChildren = useMemo(() => {
         const sortableItems = [...children];
-        if (sortConfig !== null) {
-            sortableItems.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
 
-                if (typeof aValue !== 'string' || typeof bValue !== 'string') return 0;
+        sortableItems.sort((a, b) => {
+            // 1. Alert Priority (Always on Top)
+            const aPending = a.changeRequest?.status === "pending";
+            const bPending = b.changeRequest?.status === "pending";
+            if (aPending && !bPending) return -1;
+            if (!aPending && bPending) return 1;
 
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'asc' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'asc' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
+            // 2. Main Sort
+            const { key, direction } = sortConfig;
+            let valA: any = a[key] || "";
+            let valB: any = b[key] || "";
+
+            // Custom Sort Logic for specific columns
+            if (key === 'status') {
+                const statusOrder: Record<string, number> = { "arrived": 1, "pending": 2, "left": 3, "absent": 4 };
+                valA = statusOrder[a.status] || 99;
+                valB = statusOrder[b.status] || 99;
+            } else if (key === 'returnMethod') {
+                // Group by method
+                valA = a.returnMethod || "";
+                valB = b.returnMethod || "";
+            }
+
+            // String comparison
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+
+            return 0;
+        });
+
         return sortableItems;
     }, [children, sortConfig]);
 
@@ -279,6 +297,7 @@ export function DailyAttendanceList() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
+
                     <div className="text-xs font-medium text-muted-foreground whitespace-nowrap bg-white px-2 py-1 rounded border shadow-sm">
                         {filteredChildren.length}名
                     </div>
@@ -290,18 +309,32 @@ export function DailyAttendanceList() {
                     <Table>
                         <TableHeader className="bg-gray-100">
                             <TableRow>
-                                <TableHead className="w-[40px] px-2 text-center">帰</TableHead>
-                                <TableHead className="w-[50px] px-2 cursor-pointer" onClick={() => handleSort('className')}>
-                                    <div className="flex items-center">組 <ArrowUpDown className="h-3 w-3" /></div>
+                                <TableHead className="w-[40px] px-2 text-center cursor-pointer hover:bg-gray-200" onClick={() => handleSortCol('returnMethod')}>
+                                    <div className="flex items-center justify-center">
+                                        帰 {sortConfig.key === 'returnMethod' && <ArrowUpDown className="h-3 w-3 ml-1" />}
+                                    </div>
                                 </TableHead>
-                                <TableHead className="w-[80px] px-2 cursor-pointer" onClick={() => handleSort('childName')}>
-                                    <div className="flex items-center">氏名 <ArrowUpDown className="h-3 w-3" /></div>
+                                <TableHead className="w-[50px] px-2 cursor-pointer" onClick={() => handleSortCol('className')}>
+                                    <div className="flex items-center">組 {sortConfig.key === 'className' && <ArrowUpDown className="h-3 w-3 ml-1" />}</div>
                                 </TableHead>
-                                <TableHead className="w-[40px] px-2 text-center">
-                                    状態
+                                <TableHead className="w-[80px] px-2 cursor-pointer" onClick={() => handleSortCol('childName')}>
+                                    <div className="flex items-center">氏名 {sortConfig.key === 'childName' && <ArrowUpDown className="h-3 w-3 ml-1" />}</div>
                                 </TableHead>
-                                <TableHead className="w-[100px] px-2 text-center">入室</TableHead>
-                                <TableHead className="w-[100px] px-2 text-center">退室</TableHead>
+                                <TableHead className="w-[40px] px-2 text-center cursor-pointer hover:bg-gray-200" onClick={() => handleSortCol('status')}>
+                                    <div className="flex items-center justify-center">
+                                        状態 {sortConfig.key === 'status' && <ArrowUpDown className="h-3 w-3 ml-1" />}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="w-[100px] px-2 text-center cursor-pointer hover:bg-gray-200" onClick={() => handleSortCol('arrivalTime')}>
+                                    <div className="flex items-center justify-center">
+                                        入室 {sortConfig.key === 'arrivalTime' && <ArrowUpDown className="h-3 w-3 ml-1" />}
+                                    </div>
+                                </TableHead>
+                                <TableHead className="w-[100px] px-2 text-center cursor-pointer hover:bg-gray-200" onClick={() => handleSortCol('departureTime')}>
+                                    <div className="flex items-center justify-center">
+                                        退室 {sortConfig.key === 'departureTime' && <ArrowUpDown className="h-3 w-3 ml-1" />}
+                                    </div>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -311,9 +344,9 @@ export function DailyAttendanceList() {
                                 const hasPending = child.changeRequest?.status === "pending";
 
                                 return (
-                                    <TableRow key={child.id} className={cn("h-12", getRowColor(child.status), hasPending && "bg-yellow-50 hover:bg-yellow-100 ring-1 ring-inset ring-yellow-300")}>
+                                    <TableRow key={child.id} className={cn("h-12 border-b transition-colors", getRowColor(child.status), hasPending && "bg-yellow-100 hover:bg-yellow-200 ring-2 ring-inset ring-yellow-400 z-10 relative")}>
                                         <TableCell className="px-2 text-center relative">
-                                            {hasPending && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
+                                            {hasPending && <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse border border-white shadow-sm" />}
                                             <div
                                                 className="flex justify-center cursor-pointer hover:opacity-70 transition-opacity"
                                                 title={child.returnDetails || child.returnMethod}

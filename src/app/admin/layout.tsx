@@ -31,7 +31,10 @@ export default function AdminLayout({
             <aside className="w-64 bg-white border-r hidden md:flex flex-col">
                 <div className="p-6 border-b">
                     <h1 className="text-xl font-bold tracking-tight text-primary">KiraKira Manager</h1>
-                    <p className="text-xs text-muted-foreground">放課後児童クラブ管理</p>
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver2.2</p>
+                        <p className="text-[10px] text-muted-foreground/80">放課後児童クラブ管理</p>
+                    </div>
                 </div>
                 <nav className="flex-1 p-4 space-y-1">
                     {navItems.map((item) => (
