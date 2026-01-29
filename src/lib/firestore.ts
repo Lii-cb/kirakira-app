@@ -13,7 +13,8 @@ import {
     serverTimestamp,
     orderBy,
     limit,
-    getDoc
+    getDoc,
+    runTransaction
 } from "firebase/firestore";
 import { AttendanceRecord, Child, Reservation, Application } from "@/types/firestore";
 
@@ -257,6 +258,94 @@ export const completeNotification = async (id: string) => {
         active: false,
         status: "completed"
     });
+};
+
+
+// --- Staff Attendance ---
+
+export type StaffStatus = 'work' | 'temp_out' | 'left' | 'absent';
+
+export interface StaffState {
+    id: string;
+    name: string;
+    status: StaffStatus;
+    time: string; // HH:mm
+}
+
+export const subscribeStaffAttendance = (date: string, callback: (staff: StaffState[]) => void) => {
+    const docRef = doc(db, "staff_daily", date);
+    return onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            callback(data.list || []);
+        } else {
+            callback([]);
+        }
+    });
+};
+
+export const updateStaffStatus = async (date: string, staff: StaffState) => {
+    const docRef = doc(db, "staff_daily", date);
+    try {
+        // Using runTransaction for atomic updates on the array
+        await runTransaction(db, async (transaction) => {
+            const sfDoc = await transaction.get(docRef);
+            let list: StaffState[] = [];
+            if (sfDoc.exists()) {
+                list = sfDoc.data().list || [];
+            }
+
+            const index = list.findIndex(s => s.id === staff.id);
+            if (index >= 0) {
+                list[index] = staff;
+            } else {
+                list.push(staff);
+            }
+
+            transaction.set(docRef, { list }, { merge: true });
+        });
+    } catch (e) {
+        console.error("Staff update failed: ", e);
+    }
+};
+
+export const addStaffMember = async (date: string, name: string) => {
+    const newStaff: StaffState = {
+        id: `staff-${Date.now()}`,
+        name,
+        status: 'absent', // Default to absent or 'work' if adding? Usually 'absent' then click to work.
+        time: '--:--'
+    };
+    await updateStaffStatus(date, newStaff);
+};
+
+export const removeStaffMember = async (date: string, staffId: string) => {
+    const docRef = doc(db, "staff_daily", date);
+    await runTransaction(db, async (transaction) => {
+        const sfDoc = await transaction.get(docRef);
+        if (!sfDoc.exists()) return;
+
+        const list: StaffState[] = sfDoc.data().list || [];
+        const newList = list.filter(s => s.id !== staffId);
+        transaction.set(docRef, { list: newList }, { merge: true });
+    });
+};
+
+// Batch register staff shifts
+export const registerStaffShifts = async (name: string, dates: Date[]) => {
+    const promises = dates.map(async (date) => {
+        const dateStr = date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-');
+        // Reuse addStaffMember logic but parallel
+        // We can just call updateStaffStatus directly
+        const newStaff: StaffState = {
+            id: `staff-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name,
+            status: 'absent',
+            time: '--:--'
+        };
+        await updateStaffStatus(dateStr, newStaff);
+    });
+    await Promise.all(promises);
 };
 
 

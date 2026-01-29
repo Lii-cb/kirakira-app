@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings } from "lucide-react";
 import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
 import { StaffNotificationToast } from "@/components/admin/staff-notification-toast";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function AdminLayout({
     children,
@@ -32,11 +38,11 @@ export default function AdminLayout({
                 <div className="p-6 border-b">
                     <h1 className="text-xl font-bold tracking-tight text-primary">KiraKira Manager</h1>
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver2.2</p>
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver2.4</p>
                         <p className="text-[10px] text-muted-foreground/80">放課後児童クラブ管理</p>
                     </div>
                 </div>
-                <nav className="flex-1 p-4 space-y-1">
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
                         <Link key={item.href} href={item.href}>
                             <Button
@@ -49,7 +55,7 @@ export default function AdminLayout({
                         </Link>
                     ))}
                 </nav>
-                <div className="p-4 border-t space-y-2">
+                <div className="p-4 border-t space-y-2 flex-shrink-0">
                     <Link href="/guardian/home">
                         <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground hover:text-primary">
                             <Users className="h-4 w-4" />
@@ -84,14 +90,47 @@ export default function AdminLayout({
                     <Calendar className="h-6 w-6" />
                     <span className="text-[10px]">予約</span>
                 </Link>
-                <Link href="/admin/users" className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg", pathname.startsWith("/admin/users") ? "text-primary bg-primary/5" : "text-muted-foreground")}>
-                    <Users className="h-6 w-6" />
-                    <span className="text-[10px]">名簿</span>
+                <Link href="/admin/documents" className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg", pathname.startsWith("/admin/documents") ? "text-primary bg-primary/5" : "text-muted-foreground")}>
+                    <FileText className="h-6 w-6" />
+                    <span className="text-[10px]">書類</span>
                 </Link>
-                <Link href="/guardian/home" className="flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg text-muted-foreground hover:bg-gray-100">
-                    <Users className="h-6 w-6" />
-                    <span className="text-[10px]">保護者</span>
-                </Link>
+
+                {/* Mobile Settings Menu (Drawer-like) */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <div className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg cursor-pointer", pathname.search(/\/admin\/(settings|applications|users|finance)/) !== -1 ? "text-primary bg-primary/5" : "text-muted-foreground")}>
+                            <Settings className="h-6 w-6" />
+                            <span className="text-[10px]">設定</span>
+                        </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 mb-2">
+                        <DropdownMenuItem asChild>
+                            <Link href="/admin/applications" className="w-full flex items-center p-2 cursor-pointer">
+                                <FileText className="h-4 w-4 mr-2" /> 入会申請
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href="/admin/users" className="w-full flex items-center p-2 cursor-pointer">
+                                <Users className="h-4 w-4 mr-2" /> 児童・利用者
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href="/admin/finance" className="w-full flex items-center p-2 cursor-pointer">
+                                <Banknote className="h-4 w-4 mr-2" /> 金銭管理
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <Link href="/admin/settings" className="w-full flex items-center p-2 cursor-pointer">
+                                <Settings className="h-4 w-4 mr-2" /> 設定
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="border-t mt-1 text-muted-foreground">
+                            <Link href="/guardian/home" className="w-full flex items-center p-2 cursor-pointer">
+                                <Users className="h-4 w-4 mr-2" /> 保護者画面へ
+                            </Link>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </nav>
         </div>
     );

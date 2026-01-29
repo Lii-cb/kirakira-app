@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { AttendanceRecord } from "@/types/firestore";
 import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
 import { useStaffNotifications } from "@/contexts/staff-notification-context";
+import { StaffAttendanceList } from "@/components/admin/staff-attendance-list";
 
 // Generate Time Options
 const generateTimeOptions = () => {
@@ -303,6 +304,9 @@ export function DailyAttendanceList() {
                     </div>
                 </div>
             </div>
+
+            {/* Staff Attendance List */}
+            <StaffAttendanceList />
 
             <div className="rounded-md border shadow-sm bg-white overflow-x-auto pb-20">
                 <div className="min-w-[500px] md:min-w-full">
