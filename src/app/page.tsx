@@ -30,7 +30,7 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href="/guardian/home">
+              <Link href="/guardian/login">
                 <Button className="w-full group" size="lg">
                   保護者ポータルへ
                   <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />

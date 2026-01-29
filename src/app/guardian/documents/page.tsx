@@ -1,79 +1,105 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Download, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FileText, ExternalLink, Download, File, Loader2 } from "lucide-react";
+import { getDocuments } from "@/lib/firestore";
+import { AppDocument } from "@/types/firestore";
 
 export default function GuardianDocumentsPage() {
-    // Mock Data
-    const notices = [
-        { id: 1, title: "【重要】台風接近に伴う対応について", date: "2026/01/25", tag: "重要", isNew: true },
-        { id: 2, title: "2月の給食メニュー・おやつ表", date: "2026/01/20", tag: "献立", isNew: true },
-        { id: 3, title: "インフルエンザの流行状況について", date: "2026/01/15", tag: "お知らせ", isNew: false },
-        { id: 4, title: "学童だより 1月号", date: "2026/01/01", tag: "お便り", isNew: false },
-        { id: 5, title: "年末年始の閉所日のお知らせ", date: "2025/12/10", tag: "お知らせ", isNew: false },
-    ];
+    const [documents, setDocuments] = useState<AppDocument[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchDocs = async () => {
+            try {
+                const data = await getDocuments();
+                setDocuments(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDocs();
+    }, []);
+
+    const getCategoryLabel = (cat: string) => {
+        switch (cat) {
+            case "news": return "お知らせ";
+            case "menu": return "献立表";
+            case "event": return "イベント";
+            case "other": return "その他";
+            default: return cat;
+        }
+    };
+
+    const getCategoryColor = (cat: string) => {
+        switch (cat) {
+            case "news": return "bg-blue-100 text-blue-700 hover:bg-blue-100";
+            case "menu": return "bg-orange-100 text-orange-700 hover:bg-orange-100";
+            case "event": return "bg-pink-100 text-pink-700 hover:bg-pink-100";
+            default: return "bg-gray-100 text-gray-700 hover:bg-gray-100";
+        }
+    };
+
+    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-primary" /></div>;
 
     return (
         <div className="space-y-6 max-w-lg mx-auto pb-20">
-            <h2 className="text-xl font-bold px-2">お便り・お知らせ</h2>
-
-            <div className="space-y-2">
-                {notices.map((notice) => (
-                    <Card key={notice.id} className="hover:bg-gray-50 transition-colors cursor-pointer border-l-4 border-l-transparent hover:border-l-primary/50">
-                        <CardContent className="p-4 flex items-start gap-3">
-                            <div className="mt-1 bg-gray-100 p-2 rounded-full">
-                                <FileText className="h-5 w-5 text-gray-500" />
-                            </div>
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-xs text-muted-foreground">{notice.date}</span>
-                                    <Badge variant="outline" className="text-[10px] h-5 px-1 py-0">{notice.tag}</Badge>
-                                    {notice.isNew && (
-                                        <Badge variant="default" className="text-[10px] h-5 px-1 py-0 bg-red-500 hover:bg-red-600">NEW</Badge>
-                                    )}
-                                </div>
-                                <h3 className="font-medium text-sm leading-snug line-clamp-2">{notice.title}</h3>
-                            </div>
-                            <div className="self-center text-gray-300">
-                                <ChevronRight className="h-5 w-5" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+            <div className="bg-white p-4 rounded-xl shadow-sm border">
+                <h2 className="text-xl font-bold text-gray-800">資料・お知らせ</h2>
+                <p className="text-sm text-gray-500">学童からのお知らせや配布資料を確認できます。</p>
             </div>
 
-            <div className="px-2 mt-8">
-                <h3 className="font-semibold text-lg mb-3">書類のダウンロード</h3>
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                    <Card className="hover:bg-blue-50 cursor-pointer border-dashed">
-                        <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
-                            <Download className="h-8 w-8 text-blue-500" />
-                            <span className="text-sm font-medium text-blue-700">利用申込書</span>
-                        </CardContent>
-                    </Card>
-                    <Card className="hover:bg-blue-50 cursor-pointer border-dashed">
-                        <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
-                            <Download className="h-8 w-8 text-blue-500" />
-                            <span className="text-sm font-medium text-blue-700">就労証明書</span>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <h3 className="font-semibold text-lg mb-3">提出について</h3>
-                <Card className="bg-gray-50 border-gray-200">
-                    <CardContent className="p-4 space-y-3">
-                        <p className="text-sm text-gray-700">
-                            記入済みの書類は、以下のボタンからメールに添付して送信してください。<br />
-                            <span className="text-xs text-muted-foreground">※ カメラで撮影した画像でも受付け可能です。</span>
-                        </p>
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => window.location.href = "mailto:staff@kirakira.example.com?subject=書類提出（児童名）&body=添付ファイルにて書類を提出します。"}>
-                            <FileText className="mr-2 h-4 w-4" />
-                            メールで提出する
-                        </Button>
-                    </CardContent>
-                </Card>
+            <div className="space-y-3">
+                {documents.length === 0 ? (
+                    <div className="text-center p-10 text-muted-foreground bg-white rounded-lg border">
+                        現在、公開されている資料はありません。
+                    </div>
+                ) : (
+                    documents.map((doc) => (
+                        <Card key={doc.id} className="overflow-hidden">
+                            <CardContent className="p-4 flex items-start gap-3">
+                                <div className="mt-1">
+                                    {doc.category === "menu" ? <FileText className="w-8 h-8 text-orange-500" /> :
+                                        doc.category === "event" ? <FileText className="w-8 h-8 text-pink-500" /> :
+                                            <FileText className="w-8 h-8 text-blue-500" />}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Badge variant="secondary" className={`text-xs ${getCategoryColor(doc.category)}`}>
+                                            {getCategoryLabel(doc.category)}
+                                        </Badge>
+                                        <span className="text-xs text-gray-400">
+                                            {doc.createdAt?.seconds ? new Date(doc.createdAt.seconds * 1000).toLocaleDateString() : ""}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-bold text-gray-800 leading-tight">{doc.title}</h3>
+                                    <div className="pt-2">
+                                        {doc.url ? (
+                                            <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100">
+                                                <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                                                    <ExternalLink className="w-3 h-3" />
+                                                    リンクを開く
+                                                </a>
+                                            </Button>
+                                        ) : doc.base64 ? (
+                                            <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-green-600 border-green-200 bg-green-50 hover:bg-green-100">
+                                                <a href={doc.base64} download={doc.fileName || "document"}>
+                                                    <Download className="w-3 h-3" />
+                                                    ダウンロード {doc.fileName && <span className="text-xs opacity-70 ml-1 truncate max-w-[100px]">({doc.fileName})</span>}
+                                                </a>
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))
+                )}
             </div>
         </div>
     );

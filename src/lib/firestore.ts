@@ -14,7 +14,8 @@ import {
     orderBy,
     limit,
     getDoc,
-    runTransaction
+    runTransaction,
+    documentId
 } from "firebase/firestore";
 import { AttendanceRecord, Child, Reservation, Application } from "@/types/firestore";
 
@@ -261,6 +262,77 @@ export const completeNotification = async (id: string) => {
 };
 
 
+// --- Staff Master ---
+
+export interface Staff {
+    id: string;
+    name: string;
+    isActive: boolean;
+    createdAt: any;
+}
+
+export const getStaffList = async (): Promise<Staff[]> => {
+    const q = query(collection(db, "staff"), orderBy("createdAt", "asc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Staff));
+};
+
+export const addStaff = async (name: string) => {
+    await addDoc(collection(db, "staff"), {
+        name,
+        isActive: true,
+        createdAt: serverTimestamp()
+    });
+};
+
+export const updateStaff = async (id: string, data: Partial<Staff>) => {
+    await updateDoc(doc(db, "staff", id), data);
+};
+
+export const deleteStaff = async (id: string) => {
+    await deleteDoc(doc(db, "staff", id));
+};
+
+// Helper to get ALL staff attendance for a specific month (for stats)
+// Note: This is read-heavy if many days.
+export const getMonthlyStaffAttendance = async (year: number, month: number) => {
+    // Construct date string range "YYYY-MM-01" to "YYYY-MM-31"
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endStr = `${year}-${String(month).padStart(2, '0')}-31`; // Loose end date
+
+    // Query range on document IDs is not strictly possible directly without FieldPath logic for "between" if IDs are keys.
+    // But our IDs are "YYYY-MM-DD". We can use >= and <= on __name__ (document ID).
+
+    const q = query(
+        collection(db, "staff_daily"),
+        where(documentId(), ">=", startStr),
+        where(documentId(), "<=", endStr)
+    );
+
+    const snapshot = await getDocs(q);
+    // Aggregate result: { staffName: count } or { staffId: count }
+    // Since legacy records don't have IDs, we might have to group by Name for now.
+
+    const stats: Record<string, number> = {};
+
+    snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const list: StaffState[] = data.list || [];
+        list.forEach(staff => {
+            // Count if status is 'work', 'temp_out', 'left' (implies they came)
+            if (['work', 'temp_out', 'left'].includes(staff.status)) {
+                // Use Name as key for compatibility with legacy, or ID if available
+                // To be safe, let's use Name for stats display for now.
+                const key = staff.name;
+                stats[key] = (stats[key] || 0) + 1;
+            }
+        });
+    });
+
+    return stats;
+};
+
+
 // --- Staff Attendance ---
 
 export type StaffStatus = 'work' | 'temp_out' | 'left' | 'absent';
@@ -309,11 +381,11 @@ export const updateStaffStatus = async (date: string, staff: StaffState) => {
     }
 };
 
-export const addStaffMember = async (date: string, name: string) => {
+export const addStaffMember = async (date: string, name: string, staffId?: string) => {
     const newStaff: StaffState = {
-        id: `staff-${Date.now()}`,
+        id: staffId || `staff-${Date.now()}`,
         name,
-        status: 'absent', // Default to absent or 'work' if adding? Usually 'absent' then click to work.
+        status: 'absent',
         time: '--:--'
     };
     await updateStaffStatus(date, newStaff);
@@ -332,16 +404,14 @@ export const removeStaffMember = async (date: string, staffId: string) => {
 };
 
 // Batch register staff shifts
-export const registerStaffShifts = async (name: string, dates: Date[]) => {
+export const registerStaffShifts = async (name: string, dates: Date[], time: string = '--:--', staffId?: string) => {
     const promises = dates.map(async (date) => {
         const dateStr = date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-');
-        // Reuse addStaffMember logic but parallel
-        // We can just call updateStaffStatus directly
         const newStaff: StaffState = {
-            id: `staff-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: staffId || `staff-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name,
             status: 'absent',
-            time: '--:--'
+            time: time
         };
         await updateStaffStatus(dateStr, newStaff);
     });
@@ -386,3 +456,22 @@ export const updateChild = async (id: string, data: Partial<Child>) => {
     await updateDoc(doc(db, "children", id), data);
 };
 
+// --- Documents ---
+import { AppDocument } from "@/types/firestore";
+
+export const getDocuments = async (): Promise<AppDocument[]> => {
+    const q = query(collection(db, "documents"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppDocument));
+};
+
+export const addDocument = async (docData: Omit<AppDocument, "id" | "createdAt">) => {
+    await addDoc(collection(db, "documents"), {
+        ...docData,
+        createdAt: serverTimestamp()
+    });
+};
+
+export const deleteDocument = async (id: string) => {
+    await deleteDoc(doc(db, "documents", id));
+};

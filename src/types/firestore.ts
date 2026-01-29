@@ -22,6 +22,17 @@ export interface Child {
     snackConfig?: {
         isExempt: boolean; // おやつ不要フラグ
     };
+    authorizedEmails?: string[]; // List of allowed Google Emails
+}
+
+export interface AppDocument {
+    id: string;
+    title: string;
+    category: "news" | "menu" | "event" | "other";
+    url?: string; // External Link
+    base64?: string; // Small file storage (MVP)
+    fileName?: string;
+    createdAt: any;
 }
 
 export interface AttendanceRecord {

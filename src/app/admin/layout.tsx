@@ -14,12 +14,50 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function AdminLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+import { AdminModeProvider, useAdminMode } from "@/contexts/admin-mode-context";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const { mode, setMode } = useAdminMode(); // Use setMode instead of toggleMode
+
+    // PIN Dialog State
+    const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
+    const [pinInput, setPinInput] = useState("");
+    const [pinError, setPinError] = useState(false);
+
+    const handleModeSwitch = (checked: boolean) => {
+        if (checked) {
+            // Switching TO Admin -> Require PIN
+            setIsPinDialogOpen(true);
+            setPinInput("");
+            setPinError(false);
+        } else {
+            // Switching TO Staff -> No PIN required
+            setMode('staff');
+        }
+    };
+
+    const handlePinSubmit = () => {
+        if (pinInput === "9999") {
+            setMode('admin');
+            setIsPinDialogOpen(false);
+        } else {
+            setPinError(true);
+        }
+    };
 
     const navItems = [
         { href: "/admin/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
@@ -28,6 +66,7 @@ export default function AdminLayout({
         { href: "/admin/users", label: "児童・利用者", icon: Users },
         { href: "/admin/finance", label: "金銭管理", icon: Banknote },
         { href: "/admin/documents", label: "書類管理", icon: FileText },
+        { href: "/admin/staff", label: "職員管理", icon: Users },
         { href: "/admin/settings", label: "設定", icon: Settings },
     ];
 
@@ -38,8 +77,14 @@ export default function AdminLayout({
                 <div className="p-6 border-b">
                     <h1 className="text-xl font-bold tracking-tight text-primary">KiraKira Manager</h1>
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver2.4</p>
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver3.0</p>
                         <p className="text-[10px] text-muted-foreground/80">放課後児童クラブ管理</p>
+                    </div>
+                    <div className="flex items-center space-x-2 mt-4 bg-gray-50 p-2 rounded-md border">
+                        <Switch id="mode-toggle" checked={mode === 'admin'} onCheckedChange={handleModeSwitch} />
+                        <Label htmlFor="mode-toggle" className="text-xs font-medium cursor-pointer">
+                            {mode === 'admin' ? '管理者モード' : '職員モード'}
+                        </Label>
                     </div>
                 </div>
                 <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -104,6 +149,14 @@ export default function AdminLayout({
                         </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56 mb-2">
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <div className="flex items-center space-x-2 w-full p-1" onClick={(e) => e.stopPropagation()}>
+                                <Switch id="mode-toggle-mobile" checked={mode === 'admin'} onCheckedChange={handleModeSwitch} />
+                                <Label htmlFor="mode-toggle-mobile" className="text-xs font-medium cursor-pointer flex-1">
+                                    {mode === 'admin' ? '管理者モード' : '職員モード'}
+                                </Label>
+                            </div>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                             <Link href="/admin/applications" className="w-full flex items-center p-2 cursor-pointer">
                                 <FileText className="h-4 w-4 mr-2" /> 入会申請
@@ -120,6 +173,11 @@ export default function AdminLayout({
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
+                            <Link href="/admin/staff" className="w-full flex items-center p-2 cursor-pointer">
+                                <Users className="h-4 w-4 mr-2" /> 職員管理
+                            </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
                             <Link href="/admin/settings" className="w-full flex items-center p-2 cursor-pointer">
                                 <Settings className="h-4 w-4 mr-2" /> 設定
                             </Link>
@@ -132,6 +190,50 @@ export default function AdminLayout({
                     </DropdownMenuContent>
                 </DropdownMenu>
             </nav>
+
+            {/* PIN Dialog */}
+            <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>管理者モードへ切替</DialogTitle>
+                        <DialogDescription>
+                            PINコード（4桁）を入力してください。
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center space-x-2">
+                        <Input
+                            type="password"
+                            placeholder="PINコード"
+                            value={pinInput}
+                            onChange={(e) => setPinInput(e.target.value)}
+                            maxLength={4}
+                            className={cn(pinError && "border-red-500 focus-visible:ring-red-500")}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handlePinSubmit();
+                            }}
+                        />
+                    </div>
+                    {pinError && <p className="text-xs text-red-500 font-bold">コードが間違っています。</p>}
+                    <DialogFooter className="sm:justify-between">
+                        <div className="text-xs text-muted-foreground flex items-center">
+                            ヒント: 9999
+                        </div>
+                        <Button onClick={handlePinSubmit}>OK</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
+    );
+}
+
+export default function AdminLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <AdminModeProvider>
+            <AdminLayoutContent>{children}</AdminLayoutContent>
+        </AdminModeProvider>
     );
 }

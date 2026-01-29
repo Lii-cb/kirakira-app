@@ -34,6 +34,10 @@ import { AttendanceRecord } from "@/types/firestore";
 import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
 import { useStaffNotifications } from "@/contexts/staff-notification-context";
 import { StaffAttendanceList } from "@/components/admin/staff-attendance-list";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { useAdminMode } from "@/contexts/admin-mode-context";
 
 // Generate Time Options
 const generateTimeOptions = () => {
@@ -74,20 +78,43 @@ export function DailyAttendanceList() {
     const [selectedChild, setSelectedChild] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [currentDate, setCurrentDate] = useState<Date>(new Date());
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
     // Sort Conf (Default to Status ASC)
     const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' }>({ key: 'status', direction: 'asc' });
 
     const { sendCall } = useStaffNotifications();
 
+    // Admin/Staff Mode
+    const { mode } = useAdminMode();
+
     // Initial Data Fetch & Subscription
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
-        const unsubscribe = subscribeTodayAttendance(today, (data) => {
+        // If Staff mode, always lock to Today
+        if (mode === 'staff') {
+            const now = new Date();
+            // Check if current date is not today (just day/month/year part)
+            const todayStr = now.toISOString().split('T')[0];
+            const currentStr = currentDate.toISOString().split('T')[0];
+            if (todayStr !== currentStr) {
+                setCurrentDate(now);
+                return; // Will re-trigger
+            }
+        }
+    }, [mode]);
+
+    useEffect(() => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const unsubscribe = subscribeTodayAttendance(dateStr, (data) => {
             setChildren(data);
         });
         return () => unsubscribe();
-    }, []);
+    }, [currentDate]);
+
+    // Format Date Display
+    const dateDisplay = currentDate.toLocaleDateString("ja-JP", { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+    const isToday = currentDate.toDateString() === new Date().toDateString();
 
     // Metrics
     const metrics = useMemo(() => {
@@ -253,6 +280,47 @@ export function DailyAttendanceList() {
             {/* Sticky Compact Header */}
             {/* ... (Header code unchanged, keeping simplistic view for this diff) ... */}
             <div className="sticky -top-4 -mt-4 pt-4 pb-2 z-20 bg-gray-50/95 backdrop-blur -mx-4 px-4 border-b shadow-sm space-y-2">
+
+                {/* Date Navigation (Only for Admin, or Show Read-only for Staff?) */}
+                {/* Requirement: Staff sees today, Admin can change. */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "justify-start text-left font-normal",
+                                        !isToday && "text-primary border-primary bg-primary/5"
+                                    )}
+                                    disabled={mode === 'staff'}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateDisplay}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={currentDate}
+                                    onSelect={(date) => {
+                                        if (date) {
+                                            setCurrentDate(date);
+                                            setIsCalendarOpen(false);
+                                        }
+                                    }}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+
+                        {!isToday && (
+                            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())}>
+                                今日へ戻る
+                            </Button>
+                        )}
+                    </div>
+                </div>
                 {/* Metrics Row */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar md:justify-start">
                     {/* ... metrics ... */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, MessageCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
+import { auth, db } from "@/lib/firebase/client";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { AttendanceRecord } from "@/types/firestore";
 import {
     Dialog,
@@ -24,6 +28,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 export default function GuardianHomePage() {
     const [child, setChild] = useState<AttendanceRecord | null>(null);
     const [loading, setLoading] = useState(true);
+    const [childId, setChildId] = useState<string | null>(null);
+    const router = useRouter();
 
     // Dialog States
     const [isAbsenceOpen, setIsAbsenceOpen] = useState(false);
@@ -32,23 +38,56 @@ export default function GuardianHomePage() {
     const [returnValue, setReturnValue] = useState("お迎え");
 
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
-        // Subscribe to today's list and find "child-1"
-        // In a real app, we would query by childId directly or userId.
-        const unsubscribe = subscribeTodayAttendance(today, (data) => {
-            const myChild = data.find(c => c.childId === "child-1");
-            setChild(myChild || null);
-            setLoading(false);
+        // Auth Check using Firebase
+        const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+            if (!user || !user.email) {
+                router.push("/guardian/login");
+                return;
+            }
+
+            // Find child by email
+            // Query children where authorizedEmails contains user.email
+            const q = query(collection(db, "children"), where("authorizedEmails", "array-contains", user.email));
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                // Authenticated but no linked child
+                setLoading(false);
+                // Optionally handle this state better
+                return;
+            }
+
+            // Pick the first child found
+            const childDoc = snapshot.docs[0];
+            const foundChildId = childDoc.id;
+            setChildId(foundChildId);
+
+            // Subscribe to attendance
+            const today = new Date().toISOString().split('T')[0];
+            const unsubscribeAttendance = subscribeTodayAttendance(today, (data) => {
+                const myChild = data.find(c => c.childId === foundChildId);
+                // If no attendance record, maybe create a "stand-in" from child doc?
+                // For now, follow existing logic.
+                setChild(myChild || null);
+                setLoading(false);
+            });
+
+            return () => unsubscribeAttendance();
         });
-        return () => unsubscribe();
-    }, []);
+
+        return () => unsubscribeAuth();
+    }, [router]);
+
+    const handleLogout = async () => {
+        if (confirm("ログアウトしますか？")) {
+            await auth.signOut();
+            router.push("/guardian/login");
+        }
+    };
 
     const handleSubmitRequest = async (type: "absence" | "returnMethod" | "pickupTime", value: string, memo?: string) => {
         if (!child) return;
         const today = new Date().toISOString().split('T')[0];
-        // If the record doesn't exist yet (e.g. no reservation), we can't update.
-        // But ensureAttendanceRecords runs on admin dash load. 
-        // For robustness, we might need a "getOrCreate" here, but assuming admin has opened dash or cron ran.
 
         await updateAttendanceStatus(child.childId, today, {
             changeRequest: {
@@ -65,7 +104,43 @@ export default function GuardianHomePage() {
     };
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-primary" /></div>;
-    if (!child) return <div className="p-10 text-center">本日の利用予定はありません。</div>;
+
+    // Safety check if child not found in today's attendance but we have an ID
+    // Maybe we should fetch Child Master data too if not in "Today Attendance"?
+    // For now, if not in attendance, show "No Schedule" but keeping the Logout button is important.
+
+    // Helper render for header to avoid code duplication if we return early
+    const renderHeader = (name: string, id: string, classNameStr: string) => (
+        <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
+            <Avatar className="h-14 w-14 border-2 border-primary/20">
+                <AvatarImage src="/placeholder-child.png" />
+                <AvatarFallback className="bg-primary/10 text-primary">子</AvatarFallback>
+            </Avatar>
+            <div>
+                <h2 className="text-xl font-bold text-gray-800">{name}</h2>
+                <div className="text-sm text-muted-foreground">{classNameStr}</div>
+            </div>
+            <div className="ml-auto flex flex-col items-end gap-1">
+                <Badge variant="outline" className="text-xs bg-gray-50">ID: {id}</Badge>
+                <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500 hover:text-red-600 px-1" onClick={handleLogout}>
+                    <LogOut className="w-3 h-3 mr-1" />
+                    ログアウト
+                </Button>
+            </div>
+        </div>
+    );
+
+    if (!child) {
+        return (
+            <div className="space-y-6 max-w-lg mx-auto pb-20 pt-10 px-4">
+                {renderHeader("読み込み中...", childId || "", "")}
+                <div className="p-10 text-center text-muted-foreground bg-white rounded-lg border">
+                    本日の利用予定（出席データ）が見つかりません。<br />
+                    お休みか、まだ登録されていない可能性があります。
+                </div>
+            </div>
+        );
+    }
 
     const statusLabel =
         child.status === "arrived" ? "入室中" :
@@ -80,19 +155,7 @@ export default function GuardianHomePage() {
     return (
         <div className="space-y-6 max-w-lg mx-auto pb-20">
             {/* Child Header */}
-            <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border">
-                <Avatar className="h-14 w-14 border-2 border-primary/20">
-                    <AvatarImage src="/placeholder-child.png" />
-                    <AvatarFallback className="bg-primary/10 text-primary">子</AvatarFallback>
-                </Avatar>
-                <div>
-                    <h2 className="text-xl font-bold text-gray-800">{child.childName}</h2>
-                    <div className="text-sm text-muted-foreground">{child.className}</div>
-                </div>
-                <div className="ml-auto">
-                    <Badge variant="outline" className="text-xs bg-gray-50">ID: {child.childId}</Badge>
-                </div>
-            </div>
+            {renderHeader(child.childName, child.childId, child.className)}
 
             {/* Pending Request Banner */}
             {child.changeRequest && child.changeRequest.status === "pending" && (

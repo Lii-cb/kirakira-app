@@ -55,9 +55,9 @@ export default function AdminUsersPage() {
 
     // CSV Export
     const handleExport = () => {
-        const header = "学年,クラス,氏名,かな,帰宅方法(お迎え/集団下校/バス/徒歩)\n";
+        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(カンマ区切り),おやつ免除(1=免除)\n";
         const rows = children.map(c =>
-            `${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod}`
+            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(",")}",${c.snackConfig?.isExempt ? "1" : "0"}`
         ).join("\n");
 
         const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), header + rows], { type: "text/csv;charset=utf-8;" });
@@ -77,7 +77,7 @@ export default function AdminUsersPage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!confirm("CSVファイルからデータをインポートしますか？\n※ 既存のデータに追加されます。")) {
+        if (!confirm("CSVファイルからデータをインポートしますか？\n※ IDが一致する場合は上書き更新されます。")) {
             e.target.value = "";
             return;
         }
@@ -86,36 +86,62 @@ export default function AdminUsersPage() {
         reader.onload = async (event) => {
             const text = event.target?.result as string;
             const lines = text.split(/\r\n|\n/);
-            // Skip header if it contains specific keywords, or just assume first line is header if desired. 
-            // Here, trusting user follows format. Simple implementation:
 
             let count = 0;
+            let updatedCount = 0;
+
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
                 // Skip header based on content detection
                 if (line.includes("氏名") && line.includes("学年")) continue;
 
+                // Simple split (Assumption: No commas in data)
                 const cols = line.split(",");
-                if (cols.length < 4) continue; // Basic validation
+                // Old Format support or New Format?
+                // New Format: ID,Grade,Class,Name,Kana,Method,Pass,Snack
+                // Old Format: Grade,Class,Name,Kana,Method
 
-                const [grade, className, name, kana, method] = cols;
+                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", password = "", snackExempt = "0";
+
+                // Heuristic: If col[0] looks like an ID (starts with "child-") or is empty but 8 cols
+                if (cols.length >= 6) {
+                    [id, grade, className, name, kana, method, password, snackExempt] = cols;
+                } else {
+                    // Fallback to old format (first col is grade)
+                    [grade, className, name, kana, method] = cols;
+                }
+
+                if (!name) continue;
+
+                // Clean data
+                const childData: any = {
+                    grade: parseInt(grade) || 1,
+                    className: className?.trim() || "",
+                    name: name?.trim() || "",
+                    kana: kana?.trim() || "",
+                    defaultReturnMethod: (method?.trim() as any) || "お迎え",
+                    password: password?.trim() || undefined,
+                    snackConfig: {
+                        isExempt: snackExempt?.trim() === "1"
+                    }
+                };
 
                 try {
-                    await addChild({
-                        id: "", // generated
-                        grade: parseInt(grade) || 1,
-                        className: className?.trim() || "",
-                        name: name?.trim() || "",
-                        kana: kana?.trim() || "",
-                        defaultReturnMethod: (method?.trim() as any) || "お迎え"
-                    });
-                    count++;
+                    if (id && id.trim()) {
+                        // Update existing
+                        await updateChild(id.trim(), childData);
+                        updatedCount++;
+                    } else {
+                        // Add new
+                        await addChild(childData);
+                        count++;
+                    }
                 } catch (err) {
                     console.error("Import error line " + i, err);
                 }
             }
-            alert(`${count}件のデータをインポートしました。`);
+            alert(`${count}件登録、${updatedCount}件更新しました。`);
             fetchChildren(); // Refresh
             e.target.value = ""; // Reset input
         };
@@ -150,7 +176,7 @@ export default function AdminUsersPage() {
                     <CardTitle>登録児童一覧</CardTitle>
                     <CardDescription>
                         現在登録されている児童の名簿です。<br />
-                        CSVフォーマット: 学年, クラス, 氏名, かな, 帰宅方法
+                        CSV形式: ID, 学年, クラス, 氏名, かな, 帰宅方法, "メール1,メール2", おやつ免除(1/0)
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -160,9 +186,12 @@ export default function AdminUsersPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>ID</TableHead>
                                     <TableHead>学年/クラス</TableHead>
                                     <TableHead>氏名</TableHead>
                                     <TableHead>ふりがな</TableHead>
+                                    <TableHead>パスワード(廃止)</TableHead>
+                                    <TableHead>許可メール</TableHead>
                                     <TableHead>通常帰宅方法</TableHead>
                                     <TableHead>おやつ設定</TableHead>
                                 </TableRow>
@@ -170,9 +199,14 @@ export default function AdminUsersPage() {
                             <TableBody>
                                 {children.map((child) => (
                                     <TableRow key={child.id}>
+                                        <TableCell className="text-xs text-muted-foreground">{child.id}</TableCell>
                                         <TableCell>{child.grade}年 {child.className}</TableCell>
                                         <TableCell className="font-medium">{child.name}</TableCell>
                                         <TableCell className="text-muted-foreground">{child.kana}</TableCell>
+                                        <TableCell className="text-xs font-mono">-</TableCell>
+                                        <TableCell className="text-xs max-w-[150px] truncate" title={(child.authorizedEmails || []).join(", ")}>
+                                            {(child.authorizedEmails || []).length > 0 ? (child.authorizedEmails || [])[0] + ((child.authorizedEmails || []).length > 1 ? "..." : "") : "-"}
+                                        </TableCell>
                                         <TableCell>
                                             <Badge variant="outline">{child.defaultReturnMethod}</Badge>
                                         </TableCell>

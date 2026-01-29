@@ -54,6 +54,11 @@ export default function GuardianReservePage() {
     const bookedDates = reservations.map(r => new Date(r.date.replaceAll('-', '/')));
 
     const isDateDisabled = (date: Date) => {
+        // Disable past dates
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (date < today) return true;
+
         return bookedDates.some(booked =>
             booked.getFullYear() === date.getFullYear() &&
             booked.getMonth() === date.getMonth() &&
@@ -106,6 +111,14 @@ export default function GuardianReservePage() {
 
     const handleCancelReservation = async () => {
         if (!selectedReservation) return;
+
+        // Prevent cancelling past reservations
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (selectedReservation.date < todayStr) {
+            alert("過去の予約は取り消せません。");
+            return;
+        }
+
         if (!confirm("本当にこの予約を取り消しますか？")) return;
 
         try {
