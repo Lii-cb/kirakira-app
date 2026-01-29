@@ -258,3 +258,42 @@ export const completeNotification = async (id: string) => {
         status: "completed"
     });
 };
+
+
+// --- Payments ---
+
+import { Payment } from "@/types/firestore";
+
+export const addPaymentRequest = async (childId: string, amount: number) => {
+    const today = new Date().toISOString().split('T')[0];
+    await addDoc(collection(db, "payments"), {
+        childId,
+        amount,
+        date: today,
+        status: "pending",
+        createdAt: serverTimestamp()
+    });
+};
+
+export const getPaymentsForChild = async (childId: string): Promise<Payment[]> => {
+    const q = query(collection(db, "payments"), where("childId", "==", childId), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+};
+
+export const getAllPayments = async (): Promise<Payment[]> => {
+    const q = query(collection(db, "payments"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+};
+
+export const confirmPayment = async (id: string) => {
+    await updateDoc(doc(db, "payments", id), {
+        status: "confirmed"
+    });
+};
+
+export const updateChild = async (id: string, data: Partial<Child>) => {
+    await updateDoc(doc(db, "children", id), data);
+};
+

@@ -9,9 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { submitReservations, getReservationsForChild, cancelReservation } from "@/lib/firestore";
-import { Reservation } from "@/types/firestore";
-import { Loader2, Trash2 } from "lucide-react";
+import { submitReservations, getReservationsForChild, cancelReservation, getChildren } from "@/lib/firestore";
+import { Reservation, Child } from "@/types/firestore";
+import { Loader2, Trash2, Cookie } from "lucide-react";
 
 export default function GuardianReservePage() {
     const [dates, setDates] = useState<Date[] | undefined>([]);
@@ -19,17 +19,34 @@ export default function GuardianReservePage() {
     const [wantsSnack, setWantsSnack] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [childConfig, setChildConfig] = useState<Child | null>(null);
 
     // Dialog State
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+    const childId = "child-1"; // Mock ID
+
     useEffect(() => {
-        fetchHistory();
+        const loadData = async () => {
+            const [resData, childrenData] = await Promise.all([
+                getReservationsForChild(childId),
+                getChildren()
+            ]);
+            setReservations(resData);
+            const myChild = childrenData.find(c => c.id === childId);
+            setChildConfig(myChild || null);
+
+            // If exempt, force snack off
+            if (myChild?.snackConfig?.isExempt) {
+                setWantsSnack(false);
+            }
+        };
+        loadData();
     }, []);
 
     const fetchHistory = async () => {
-        const data = await getReservationsForChild("child-1");
+        const data = await getReservationsForChild(childId);
         setReservations(data);
     };
 
@@ -44,10 +61,15 @@ export default function GuardianReservePage() {
         );
     };
 
+    const isSnackExempt = childConfig?.snackConfig?.isExempt || false;
+
     // Fee Calculation
     const daysCount = dates?.length || 0;
     const basicFee = 0;
-    const snackFeePerDay = wantsSnack ? 100 : 0;
+    // If exempt, snack fee is 0 regardless of checkbox (though checkbox should be disabled)
+    // If not exempt, use checkbox
+    const effectiveWantsSnack = isSnackExempt ? false : wantsSnack;
+    const snackFeePerDay = effectiveWantsSnack ? 100 : 0;
     const extraFeePerDay = (selectedTime === "extended" || selectedTime === "late") ? 100 : 0;
 
     const totalDailyFee = basicFee + snackFeePerDay + extraFeePerDay;
@@ -61,7 +83,6 @@ export default function GuardianReservePage() {
 
         setIsSubmitting(true);
         try {
-            const childId = "child-1";
             const timeLabel = selectedTime === "standard" ? "14:00-17:00" :
                 selectedTime === "extended" ? "14:00-18:00" : "15:00-18:00";
 
@@ -69,7 +90,7 @@ export default function GuardianReservePage() {
 
             await submitReservations(childId, dates, timeLabel, {
                 fee: dayFee,
-                hasSnack: wantsSnack
+                hasSnack: effectiveWantsSnack
             });
 
             alert(`${daysCount}件の予約リクエストを送信しました。\n予定利用料: ${totalEstimatedFee}円`);
@@ -169,19 +190,35 @@ export default function GuardianReservePage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex items-center space-x-2 border p-3 rounded-md">
+
+                            <div className={`flex items-start space-x-2 border p-3 rounded-md ${isSnackExempt ? "bg-gray-100 opacity-80" : "bg-white"}`}>
                                 <Checkbox
                                     id="snack"
-                                    checked={wantsSnack}
+                                    checked={isSnackExempt ? false : wantsSnack}
                                     onCheckedChange={(c: boolean | "indeterminate") => setWantsSnack(!!c)}
+                                    disabled={isSnackExempt}
+                                    className="mt-1"
                                 />
-                                <label
-                                    htmlFor="snack"
-                                    className="text-sm font-medium leading-none"
-                                >
-                                    おやつを希望する (+100円)
-                                </label>
+                                <div className="grid gap-1.5 leading-none">
+                                    <label
+                                        htmlFor="snack"
+                                        className="text-sm font-medium leading-none flex items-center gap-2"
+                                    >
+                                        おやつを希望する
+                                        {isSnackExempt ? (
+                                            <Badge variant="outline" className="text-[10px] bg-gray-200 text-gray-600">年間設定で無し</Badge>
+                                        ) : (
+                                            <span className="text-xs font-normal text-muted-foreground">(+100円)</span>
+                                        )}
+                                    </label>
+                                    {!isSnackExempt && (
+                                        <p className="text-xs text-muted-foreground">
+                                            短時間の利用などで不要な場合はチェックを外してください。
+                                        </p>
+                                    )}
+                                </div>
                             </div>
+
                             <Button className="w-full font-bold" onClick={handleReserve} disabled={isSubmitting}>
                                 {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "予約リクエストを送信"}
                             </Button>

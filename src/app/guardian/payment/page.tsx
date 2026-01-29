@@ -1,120 +1,183 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, CreditCard, Clock, Loader2, Wallet } from "lucide-react";
-import { getReservationsForChild } from "@/lib/firestore";
-import { Reservation } from "@/types/firestore";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Wallet, PlusCircle, History, Receipt } from "lucide-react";
+import { getReservationsForChild, getPaymentsForChild, addPaymentRequest, getChildren } from "@/lib/firestore";
+import { Reservation, Payment, Child } from "@/types/firestore";
 
 export default function GuardianPaymentPage() {
     const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [payments, setPayments] = useState<Payment[]>([]);
+    const [childConfig, setChildConfig] = useState<Child | null>(null);
     const [loading, setLoading] = useState(true);
+    const [inputAmount, setInputAmount] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const childId = "child-1"; // Mock ID
+
+    const fetchData = async () => {
+        try {
+            const [resData, payData, childrenData] = await Promise.all([
+                getReservationsForChild(childId),
+                getPaymentsForChild(childId),
+                getChildren()
+            ]);
+            setReservations(resData);
+            setPayments(payData);
+            const myChild = childrenData.find(c => c.id === childId);
+            setChildConfig(myChild || null);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetch = async () => {
-            try {
-                // In real app, get childId from auth
-                const data = await getReservationsForChild("child-1");
-                setReservations(data);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetch();
+        fetchData();
     }, []);
 
-    // Calculate Current Month Bill
-    const now = new Date();
-    const currentMonthNum = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const currentMonthLabel = `${currentYear}年 ${currentMonthNum}月分`;
-    // Payment due is usually next month 10th
-    const dueDate = new Date(currentYear, currentMonthNum, 10).toLocaleDateString();
+    const handlePaymentSubmit = async () => {
+        const amount = parseInt(inputAmount);
+        if (isNaN(amount) || amount <= 0) return;
 
-    const thisMonthReservations = reservations.filter(r => {
-        // Date format is YYYY-MM-DD
-        const [y, m, d] = r.date.split('-').map(Number);
-        return y === currentYear && m === currentMonthNum;
-    });
+        setIsSubmitting(true);
+        try {
+            await addPaymentRequest(childId, amount);
+            await fetchData();
+            setInputAmount("");
+            alert("支払い報告を送信しました。");
+        } catch (e) {
+            console.error(e);
+            alert("送信に失敗しました。");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-    const totalFee = thisMonthReservations.reduce((sum, r) => sum + (r.fee || 0), 0);
-    const snackFee = thisMonthReservations.filter(r => r.hasSnack).length * 100;
-    const basicAndExtra = totalFee - snackFee;
+    // --- Calculations ---
+    const totalDeposited = payments
+        .filter(p => p.status === "confirmed")
+        .reduce((sum, p) => sum + p.amount, 0);
+
+    const isExempt = childConfig?.snackConfig?.isExempt || false;
+
+    // Filter used reservations (only confirmed ones count as 'usage')
+    // In a real system, we might use 'attendance' records for billing, but using reservations for now.
+    const usedReservations = reservations.filter(r => r.status === "confirmed");
+
+    const totalUsed = usedReservations.reduce((sum, r) => {
+        const fee = r.fee || 0;
+        const snack = (r.hasSnack && !isExempt) ? 100 : 0;
+        return sum + fee + snack;
+    }, 0);
+
+    const currentBalance = totalDeposited - totalUsed;
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
 
     return (
         <div className="space-y-6 max-w-lg mx-auto pb-20">
-            <h2 className="text-xl font-bold px-2">利用料金</h2>
+            <h2 className="text-xl font-bold px-2">プール金残高</h2>
 
-            {/* Current Month Bill */}
-            <Card className="border-2 border-primary/20 shadow-md overflow-hidden">
-                <CardHeader className="bg-primary/5 pb-3 pt-4">
-                    <div className="flex justify-between items-center">
-                        <CardTitle className="text-lg text-gray-800">{currentMonthLabel} ご請求</CardTitle>
-                        <Badge variant="destructive" className="bg-orange-500 hover:bg-orange-600 shadow-sm">未確定</Badge>
-                    </div>
+            {/* Balance Card */}
+            <Card className={`border-2 shadow-md ${currentBalance < 0 ? "border-red-200 bg-red-50" : "border-green-200 bg-white"}`}>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-muted-foreground">現在の残高</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6">
-                    <div className="text-center mb-8">
-                        <div className="text-sm text-muted-foreground mb-1">お支払い予定金額</div>
-                        <div className="text-5xl font-black text-gray-900 tracking-tight">
-                            ¥{totalFee.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-red-600 font-bold mt-3 flex items-center justify-center gap-1 bg-red-50 py-1 px-3 rounded-full w-fit mx-auto">
-                            <Clock className="h-3 w-3" />
-                            お支払い期限: {dueDate}
-                        </div>
+                <CardContent>
+                    <div className={`text-4xl font-bold ${currentBalance < 0 ? "text-red-600" : "text-gray-800"}`}>
+                        ¥{currentBalance.toLocaleString()}
                     </div>
-
-                    <div className="divide-y border-t border-b">
-                        <div className="flex justify-between items-center py-3 text-sm">
-                            <div>
-                                <div className="font-medium text-gray-700">利用料 (基本+延長)</div>
-                                <div className="text-xs text-gray-400">利用日数: {thisMonthReservations.length}日</div>
-                            </div>
-                            <span className="font-bold text-gray-900">¥{basicAndExtra.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-3 text-sm">
-                            <div>
-                                <div className="font-medium text-gray-700">おやつ代</div>
-                                <div className="text-xs text-gray-400">回数: {snackFee / 100}回</div>
-                            </div>
-                            <span className="font-bold text-gray-900">¥{snackFee.toLocaleString()}</span>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center py-3 text-base font-bold bg-gray-50 -mx-6 px-6 mt-4 border-t">
-                        <span>合計</span>
-                        <span>¥{totalFee.toLocaleString()}</span>
-                    </div>
-
+                    {currentBalance < 0 && (
+                        <p className="text-sm text-red-600 font-bold mt-2">
+                            ※ 残高が不足しています。早めの入金をお願いします。
+                        </p>
+                    )}
                 </CardContent>
-                <CardFooter className="flex flex-col gap-2 bg-gray-50/50 pt-4 pb-6">
-                    <Button
-                        className="w-full h-12 text-lg font-bold shadow-md bg-green-600 hover:bg-green-700"
-                        disabled={totalFee === 0}
-                        onClick={() => {
-                            if (confirm("職員に現金を渡して、支払いを完了しますか？")) {
-                                alert("支払いを申請しました。職員の承認をお待ちください。");
-                            }
-                        }}
-                    >
-                        <Wallet className="mr-2 h-5 w-5" />
-                        支払う
-                    </Button>
-                    {/* Note hidden as requested */}
-                </CardFooter>
             </Card>
 
-            {/* History Link (Mock) */}
-            <div className="text-center">
-                <Button variant="link" className="text-muted-foreground">過去の履歴を見る</Button>
-            </div>
+            {/* Actions */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg">支払い報告</CardTitle>
+                    <CardDescription>
+                        職員に現金を渡したり、振込をした後に報告してください。
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex gap-2">
+                    <div className="relative flex-1">
+                        <span className="absolute left-3 top-2.5 text-gray-500">¥</span>
+                        <Input
+                            type="number"
+                            className="pl-8"
+                            placeholder="例: 10000"
+                            value={inputAmount}
+                            onChange={(e) => setInputAmount(e.target.value)}
+                        />
+                    </div>
+                    <Button onClick={handlePaymentSubmit} disabled={isSubmitting || !inputAmount}>
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : "報告する"}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            {/* History Tabs */}
+            <Tabs defaultValue="payments">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="payments">入金履歴</TabsTrigger>
+                    <TabsTrigger value="usage">利用実績</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="payments" className="space-y-3 mt-4">
+                    {payments.length === 0 ? <div className="text-center text-muted-foreground py-4">履歴はありません</div> :
+                        payments.map(p => (
+                            <div key={p.id} className="flex justify-between items-center bg-white p-3 rounded-lg border shadow-sm">
+                                <div>
+                                    <div className="font-bold text-gray-800">¥{p.amount.toLocaleString()}</div>
+                                    <div className="text-xs text-muted-foreground">{p.date.replaceAll('-', '/')} 支払</div>
+                                </div>
+                                <Badge variant={p.status === "confirmed" ? "default" : "secondary"}>
+                                    {p.status === "confirmed" ? "受領済" : "確認中"}
+                                </Badge>
+                            </div>
+                        ))
+                    }
+                </TabsContent>
+
+                <TabsContent value="usage" className="space-y-3 mt-4">
+                    {usedReservations.length === 0 ? <div className="text-center text-muted-foreground py-4">利用履歴はありません</div> :
+                        usedReservations.map(r => {
+                            const fee = r.fee || 0;
+                            const snack = (r.hasSnack && !isExempt) ? 100 : 0;
+                            const total = fee + snack;
+                            return (
+                                <div key={r.id} className="flex justify-between items-center bg-white p-3 rounded-lg border shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-gray-100 p-2 rounded-full">
+                                            <Receipt className="h-4 w-4 text-gray-500" />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-800">{r.date.slice(5).replace('-', '/')} 利用</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                基本: ¥{fee} / おやつ: ¥{snack}
+                                                {isExempt && <span className="text-orange-500 ml-1">(免除)</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="font-bold text-red-600">-¥{total}</span>
+                                </div>
+                            );
+                        })
+                    }
+                </TabsContent>
+            </Tabs>
+
         </div>
     );
 }

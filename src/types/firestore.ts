@@ -19,6 +19,9 @@ export interface Child {
     grade: number; // 1-6
     guardianId?: string; // ID of the primary guardian
     defaultReturnMethod?: string; // "お迎え" etc.
+    snackConfig?: {
+        isExempt: boolean; // おやつ不要フラグ
+    };
 }
 
 export interface AttendanceRecord {
@@ -78,6 +81,15 @@ export interface StaffNotification {
     senderId: string;
     status: "pending" | "acknowledged" | "completed";
     reply?: string; // "アリーナ", "外", "探します" etc
-    createdAt: any;
     active: boolean;
+}
+
+export interface Payment {
+    id: string;
+    childId: string;
+    amount: number;
+    date: string; // "YYYY-MM-DD"
+    status: "pending" | "confirmed" | "rejected";
+    note?: string;
+    createdAt: any;
 }

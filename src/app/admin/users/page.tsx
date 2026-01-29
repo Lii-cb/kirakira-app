@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getChildren, addChild } from "@/lib/firestore";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { getChildren, addChild, updateChild } from "@/lib/firestore";
 import { Child } from "@/types/firestore";
-import { Loader2, Download, Upload, FileUp } from "lucide-react";
+import { Loader2, Download, Upload, FileUp, Cookie } from "lucide-react";
 
 export default function AdminUsersPage() {
     const [children, setChildren] = useState<Child[]>([]);
@@ -29,6 +31,27 @@ export default function AdminUsersPage() {
     useEffect(() => {
         fetchChildren();
     }, []);
+
+    const handleSnackToggle = async (child: Child) => {
+        const newIsExempt = !child.snackConfig?.isExempt;
+
+        // Optimistic update
+        setChildren(prev => prev.map(c =>
+            c.id === child.id
+                ? { ...c, snackConfig: { isExempt: newIsExempt } }
+                : c
+        ));
+
+        try {
+            await updateChild(child.id, {
+                snackConfig: { isExempt: newIsExempt }
+            });
+        } catch (e) {
+            console.error(e);
+            alert("更新に失敗しました。");
+            fetchChildren(); // Revert
+        }
+    };
 
     // CSV Export
     const handleExport = () => {
@@ -141,6 +164,7 @@ export default function AdminUsersPage() {
                                     <TableHead>氏名</TableHead>
                                     <TableHead>ふりがな</TableHead>
                                     <TableHead>通常帰宅方法</TableHead>
+                                    <TableHead>おやつ設定</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -151,6 +175,23 @@ export default function AdminUsersPage() {
                                         <TableCell className="text-muted-foreground">{child.kana}</TableCell>
                                         <TableCell>
                                             <Badge variant="outline">{child.defaultReturnMethod}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center space-x-2">
+                                                <Switch
+                                                    id={`snack-${child.id}`}
+                                                    checked={!child.snackConfig?.isExempt}
+                                                    onCheckedChange={() => handleSnackToggle(child)}
+                                                    className="data-[state=checked]:bg-orange-500"
+                                                />
+                                                <Label htmlFor={`snack-${child.id}`} className="text-sm text-gray-600">
+                                                    {child.snackConfig?.isExempt ? (
+                                                        <span className="text-muted-foreground text-xs">なし</span>
+                                                    ) : (
+                                                        <span className="text-orange-600 font-bold text-xs flex items-center"><Cookie className="w-3 h-3 mr-1" />あり</span>
+                                                    )}
+                                                </Label>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
