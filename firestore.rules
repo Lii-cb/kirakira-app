@@ -1,8 +1,63 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+    
+    // Check if user is in 'admins' collection (ID must be their email)
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+    
+    // Check if user is authorized for a specific child (Read from Child doc)
+    function isParentOf(childId) {
+      let child = get(/databases/$(database)/documents/children/$(childId));
+      return request.auth != null && (request.auth.token.email in child.data.authorizedEmails);
+    }
+
+    // --- Rules ---
+
+    // Admin Whitelist
+    // collection: admins (documentId = email address)
+    match /admins/{email} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin(); // Admins can add other admins
+    }
+
+    // Children Master
+    match /children/{childId} {
+      // Admin: Full Access
+      // Parent: Read Only (Own child)
+      allow read: if isAdmin() || (request.auth != null && request.auth.token.email in resource.data.authorizedEmails);
+      allow write: if isAdmin();
+    }
+
+    // Attendance Records
+    match /attendance/{docId} {
+      // Admin: Full Access
+      // Parent: Read Own Child's Record
+      allow read: if isAdmin() || isParentOf(resource.data.childId);
+      
+      // Parent: Can Update specific fields (Request changes)
+      // Note: Allowing 'create' might be needed if the record doesn't exist yet? 
+      // Usually records are created by Staff/System. Parents just update.
+      allow update: if isAdmin() || (
+        isParentOf(resource.data.childId) && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['changeRequest', 'returnMethod', 'memo', 'returnDetails'])
+      );
+      
+      allow create, delete: if isAdmin();
+    }
+
+    // Documents (PDFs etc)
+    match /documents/{docId} {
+      allow read: if request.auth != null; // Any logged-in user (Parent/Admin)
+      allow write: if isAdmin();
+    }
+    
+    // Default: Deny
     match /{document=**} {
-      allow read, write: if true; // DEVELOPMENT MODE: Open access
+      allow read, write: if false;
     }
   }
 }

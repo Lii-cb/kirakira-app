@@ -55,9 +55,10 @@ export default function AdminUsersPage() {
 
     // CSV Export
     const handleExport = () => {
-        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(カンマ区切り),おやつ免除(1=免除)\n";
+        // Updated Header: Emails joined by semicolon
+        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(セミコロン区分),おやつ免除(1=免除)\n";
         const rows = children.map(c =>
-            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(",")}",${c.snackConfig?.isExempt ? "1" : "0"}`
+            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(";")}",${c.snackConfig?.isExempt ? "1" : "0"}`
         ).join("\n");
 
         const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), header + rows], { type: "text/csv;charset=utf-8;" });
@@ -96,23 +97,28 @@ export default function AdminUsersPage() {
                 // Skip header based on content detection
                 if (line.includes("氏名") && line.includes("学年")) continue;
 
-                // Simple split (Assumption: No commas in data)
-                const cols = line.split(",");
-                // Old Format support or New Format?
-                // New Format: ID,Grade,Class,Name,Kana,Method,Pass,Snack
-                // Old Format: Grade,Class,Name,Kana,Method
+                // Simple split (Assumption: Emails separated by SEMICOLON, not comma)
+                // Remove quotes from line purely for parsing simplicity (crude but effective for this app)
+                const cleanLine = line.replace(/"/g, "");
+                const cols = cleanLine.split(",");
 
-                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", password = "", snackExempt = "0";
+                // Format: ID, Grade, Class, Name, Kana, Method, Emails, Snack
+                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", emailStr = "", snackExempt = "0";
 
-                // Heuristic: If col[0] looks like an ID (starts with "child-") or is empty but 8 cols
                 if (cols.length >= 6) {
-                    [id, grade, className, name, kana, method, password, snackExempt] = cols;
+                    // ID exists
+                    [id, grade, className, name, kana, method, emailStr, snackExempt] = cols;
                 } else {
-                    // Fallback to old format (first col is grade)
+                    // Fallback (Older formats)
                     [grade, className, name, kana, method] = cols;
                 }
 
                 if (!name) continue;
+
+                // Parse Emails
+                const authorizedEmails = emailStr
+                    ? emailStr.split(";").map(e => e.trim()).filter(e => e)
+                    : [];
 
                 // Clean data
                 const childData: any = {
@@ -121,7 +127,7 @@ export default function AdminUsersPage() {
                     name: name?.trim() || "",
                     kana: kana?.trim() || "",
                     defaultReturnMethod: (method?.trim() as any) || "お迎え",
-                    password: password?.trim() || undefined,
+                    authorizedEmails: authorizedEmails,
                     snackConfig: {
                         isExempt: snackExempt?.trim() === "1"
                     }

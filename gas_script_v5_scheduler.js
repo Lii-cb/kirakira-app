@@ -1,119 +1,146 @@
 /**
  * gas_script_v5_scheduler.js
- * Ver 3.0: Scheduled Data Sync (8:30 / 18:30)
- * Uses FirestoreGoogleAppsScript library.
- * Configure Request: Library ID: "1VUSl4b1r1eoNcRWotZKkgeOMMXsJur4xmW_JeapV7iqqI3qTCX3UUVC7" (Standard Lib)
+ * Ver 3.1: 自動データ連携 (8:30 / 18:30)
+ * 
+ * 機能:
+ * 1. DailyReportシート: その日の出席データを追記 (毎日蓄積)
+ * 2. Membersシート: 最新の児童マスタ情報を全書き換え (スナップショット)
+ * 
+ * ライブラリID: "1VUSl4b1r1eoNcRWotZKkgeOMMXsJur4xmW_JeapV7iqqI3qTCX3UUVC7"
  */
 
-// --- CONFIGURATION ---
+// --- 設定エリア ---
 const FIREBASE_CONFIG = {
-    email: "client@email.com", // Service Account Email
-    key: "-----BEGIN PRIVATE KEY-----\n..." // Service Account Private Key
-  projectId: "kirakira-app"
+    email: "client@email.com", // サービスアカウントのメールアドレス
+    key: "-----BEGIN PRIVATE KEY-----\n...", // 秘密鍵
+    projectId: "kirakira-app"
 };
 
-const SHEET_ID = "YOUR_SPREADSHEET_ID";
-const SHEET_NAME = "DailyReport";
+// ★ここを毎年変更してください★
+const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID"; // スプレッドシートID
+const SHEET_NAME_DAILY = "DailyReport";       // 日報用シート名
+const SHEET_NAME_MEMBERS = "Members";         // 児童マスタ用シート名
 
-// Initialize Firestore
 const firestore = FirestoreApp.getFirestore(FIREBASE_CONFIG.email, FIREBASE_CONFIG.key, FIREBASE_CONFIG.projectId);
 
 /**
- * Main Sync Function
- * Trigger this at 8:30 and 18:30 via Time-driven triggers.
+ * メイン連携関数
+ * 毎日 8:30, 18:30 にトリガー実行されます
  */
 function syncToSheets() {
-    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHEET_NAME);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 1. 児童マスタの同期 (全洗い替え)
+    syncMembers(ss);
+
+    // 2. 日報の同期 (当日分の追記)
+    syncDailyReport(ss);
+}
+
+/**
+ * 児童マスタの同期 (全洗い替え)
+ */
+function syncMembers(ss) {
+    let sheet = ss.getSheetByName(SHEET_NAME_MEMBERS);
     if (!sheet) {
-        console.error("Sheet not found");
-        return;
+        sheet = ss.insertSheet(SHEET_NAME_MEMBERS);
+        // ヘッダー作成
+        sheet.getRange(1, 1, 1, 6).setValues([["ID", "学年", "クラス", "氏名", "フリガナ", "許可メール"]]);
+    }
+
+    const allChildren = firestore.getDocuments("children").map(doc => doc.fields);
+
+    // 並び替え: 学年順 -> クラス順
+    allChildren.sort((a, b) => {
+        if ((a.grade || 0) !== (b.grade || 0)) return (a.grade || 0) - (b.grade || 0);
+        return (a.className || "").localeCompare(b.className || "");
+    });
+
+    const rows = allChildren.map(c => [
+        c.id,
+        c.grade,
+        c.className || "",
+        c.name,
+        c.kana || "",
+        (c.authorizedEmails || []).join(",")
+    ]);
+
+    // クリアして書き込み
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, 6).clearContent();
+    }
+
+    if (rows.length > 0) {
+        sheet.getRange(2, 1, rows.length, 6).setValues(rows);
+    }
+}
+
+/**
+ * 日報の同期 (当日分の追記)
+ */
+function syncDailyReport(ss) {
+    let sheet = ss.getSheetByName(SHEET_NAME_DAILY);
+    if (!sheet) {
+        sheet = ss.insertSheet(SHEET_NAME_DAILY);
+        // ヘッダー作成
+        sheet.getRange(1, 1, 1, 10).setValues([["日付", "学年", "クラス", "氏名", "出欠", "入室", "退室", "延長", "おやつ", "メモ"]]);
     }
 
     const today = new Date();
     const dateStr = Utilities.formatDate(today, "Asia/Tokyo", "yyyy-MM-dd");
 
-    // 1. Fetch Today's Attendance
-    const attendancePath = "attendance";
-    // Note: Firestore Library 'query' support varies. 
-    // It's safer to fetch all today's docs if the library supports 'where'.
-    // Assuming basic fetch for now. If library allows query:
-    const allAttendance = firestore.getDocuments(attendancePath).map(doc => doc.fields);
+    // 出席データの取得
+    const allAttendance = firestore.getDocuments("attendance").map(doc => doc.fields);
     const todayRecords = allAttendance.filter(r => r.date === dateStr);
+    if (todayRecords.length === 0) return;
 
-    // 2. Fetch Children Master
-    const children = firestore.getDocuments("children").map(doc => doc.fields);
+    // 児童情報の紐付け用マップ作成
+    const allChildren = firestore.getDocuments("children").map(doc => doc.fields);
     const childMap = {};
-    children.forEach(c => childMap[c.id] = c);
+    allChildren.forEach(c => childMap[c.id] = c);
 
-    // 3. Prepare Rows
-    // Header: [Date, Grade, Class, Name, Status, Arrival, Departure, Ext_Time, Snack, Details]
-    const rows = [];
-
-    // Sort by Grade/Class
-    todayRecords.sort((a, b) => {
-        const ca = childMap[a.childId];
-        const cb = childMap[b.childId];
-        if (!ca || !cb) return 0;
-        if (ca.grade !== cb.grade) return ca.grade - cb.grade;
-        return ca.className.localeCompare(cb.className);
-    });
-
-    todayRecords.forEach(record => {
-        const child = childMap[record.childId];
-        if (!child) return;
-
-        rows.push([
+    // 行データの準備
+    const rows = todayRecords.map(r => {
+        const c = childMap[r.childId] || {};
+        return [
             dateStr,
-            child.grade,
-            child.className,
-            child.name,
-            translateStatus(record.status),
-            record.arrivalTime || "",
-            record.departureTime || "",
-            // Calculate Extension if needed
-            calculateExtension(record),
-            record.snackConfig?.isExempt ? "無" : "有", // Logic might be in child or record
-            record.memo || ""
-        ]);
+            c.grade || "",
+            c.className || "",
+            c.name || "不明",
+            translateStatus(r.status),
+            r.arrivalTime || "",
+            r.departureTime || "",
+            calculateExtension(r),
+            r.snackConfig?.isExempt ? "無" : "有",
+            r.memo || ""
+        ];
     });
 
-    // 4. Write to Sheet (Append or Overwrite Today's section?)
-    // For simplicity: Append to bottom.
-    if (rows.length > 0) {
-        sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
-    }
+    // 最下行に追記
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 10).setValues(rows);
 }
 
-function translateStatus(status) {
-    if (status === "arrived") return "出席";
-    if (status === "left") return "帰宅";
-    if (status === "absent") return "欠席";
+// --- ヘルパー関数 ---
+function translateStatus(s) {
+    if (s === "arrived") return "出席";
+    if (s === "left") return "帰宅";
+    if (s === "absent") return "欠席";
     return "予定";
 }
 
-function calculateExtension(record) {
-    // Mock logic
-    if (record.departureTime > "18:00") return "あり";
+function calculateExtension(r) {
+    if (r.departureTime > "18:00") return "あり";
     return "";
 }
 
 /**
- * Setup Triggers (Run once manually)
+ * トリガー設定 (手動で1回実行)
  */
 function setupTriggers() {
-    // 8:30 AM
-    ScriptApp.newTrigger("syncToSheets")
-        .timeBased()
-        .atHour(8)
-        .nearMinute(30)
-        .everyDays(1)
-        .create();
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(t => ScriptApp.deleteTrigger(t)); // 既存のトリガーをリセット
 
-    // 18:30 PM
-    ScriptApp.newTrigger("syncToSheets")
-        .timeBased()
-        .atHour(18)
-        .nearMinute(30)
-        .everyDays(1)
-        .create();
+    ScriptApp.newTrigger("syncToSheets").timeBased().atHour(8).nearMinute(30).everyDays(1).create();
+    ScriptApp.newTrigger("syncToSheets").timeBased().atHour(18).nearMinute(30).everyDays(1).create();
 }
