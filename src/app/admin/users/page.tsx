@@ -55,10 +55,10 @@ export default function AdminUsersPage() {
 
     // CSV Export
     const handleExport = () => {
-        // Updated Header: Emails joined by semicolon
-        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(セミコロン区分),おやつ免除(1=免除)\n";
+        // Updated Header: Added Guardian Name and Phones
+        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(セミコロン区分),保護者氏名,電話番号(セミコロン区分),おやつ免除(1=免除)\n";
         const rows = children.map(c =>
-            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(";")}",${c.snackConfig?.isExempt ? "1" : "0"}`
+            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(";")}",${c.guardianName || ""},"${(c.phoneNumbers || []).join(";")}",${c.snackConfig?.isExempt ? "1" : "0"}`
         ).join("\n");
 
         const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), header + rows], { type: "text/csv;charset=utf-8;" });
@@ -98,26 +98,31 @@ export default function AdminUsersPage() {
                 if (line.includes("氏名") && line.includes("学年")) continue;
 
                 // Simple split (Assumption: Emails separated by SEMICOLON, not comma)
-                // Remove quotes from line purely for parsing simplicity (crude but effective for this app)
                 const cleanLine = line.replace(/"/g, "");
                 const cols = cleanLine.split(",");
 
-                // Format: ID, Grade, Class, Name, Kana, Method, Emails, Snack
-                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", emailStr = "", snackExempt = "0";
+                // Format: ID, Grade, Class, Name, Kana, Method, Emails, GuardianName, Phones, Snack
+                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", emailStr = "", guardianName = "", phoneStr = "", snackExempt = "0";
 
-                if (cols.length >= 6) {
-                    // ID exists
+                if (cols.length >= 8) {
+                    // Full Format
+                    [id, grade, className, name, kana, method, emailStr, guardianName, phoneStr, snackExempt] = cols;
+                } else if (cols.length >= 6) {
+                    // Legacy Format
                     [id, grade, className, name, kana, method, emailStr, snackExempt] = cols;
                 } else {
-                    // Fallback (Older formats)
+                    // Fallback
                     [grade, className, name, kana, method] = cols;
                 }
 
                 if (!name) continue;
 
-                // Parse Emails
+                // Parse Emails & Phones
                 const authorizedEmails = emailStr
                     ? emailStr.split(";").map(e => e.trim()).filter(e => e)
+                    : [];
+                const phoneNumbers = phoneStr
+                    ? phoneStr.split(";").map(p => p.trim()).filter(p => p)
                     : [];
 
                 // Clean data
@@ -128,6 +133,8 @@ export default function AdminUsersPage() {
                     kana: kana?.trim() || "",
                     defaultReturnMethod: (method?.trim() as any) || "お迎え",
                     authorizedEmails: authorizedEmails,
+                    guardianName: guardianName?.trim() || "",
+                    phoneNumbers: phoneNumbers,
                     snackConfig: {
                         isExempt: snackExempt?.trim() === "1"
                     }
@@ -182,7 +189,7 @@ export default function AdminUsersPage() {
                     <CardTitle>登録児童一覧</CardTitle>
                     <CardDescription>
                         現在登録されている児童の名簿です。<br />
-                        CSV形式: ID, 学年, クラス, 氏名, かな, 帰宅方法, "メール1,メール2", おやつ免除(1/0)
+                        CSV形式: ID, 学年, クラス, 氏名, かな, 帰宅方法, 許可メール, 保護者名, 電話番号, おやつ免除
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -195,8 +202,7 @@ export default function AdminUsersPage() {
                                     <TableHead>ID</TableHead>
                                     <TableHead>学年/クラス</TableHead>
                                     <TableHead>氏名</TableHead>
-                                    <TableHead>ふりがな</TableHead>
-                                    <TableHead>パスワード(廃止)</TableHead>
+                                    <TableHead>保護者連絡先</TableHead>
                                     <TableHead>許可メール</TableHead>
                                     <TableHead>通常帰宅方法</TableHead>
                                     <TableHead>おやつ設定</TableHead>
@@ -207,9 +213,20 @@ export default function AdminUsersPage() {
                                     <TableRow key={child.id}>
                                         <TableCell className="text-xs text-muted-foreground">{child.id}</TableCell>
                                         <TableCell>{child.grade}年 {child.className}</TableCell>
-                                        <TableCell className="font-medium">{child.name}</TableCell>
-                                        <TableCell className="text-muted-foreground">{child.kana}</TableCell>
-                                        <TableCell className="text-xs font-mono">-</TableCell>
+                                        <TableCell className="font-medium">
+                                            {child.name}<br />
+                                            <span className="text-xs text-muted-foreground">{child.kana}</span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col text-sm">
+                                                <span className="font-bold">{child.guardianName || "-"}</span>
+                                                {(child.phoneNumbers || []).map((phone, idx) => (
+                                                    <a key={idx} href={`tel:${phone}`} className="text-blue-600 hover:underline flex items-center">
+                                                        📞 {phone}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-xs max-w-[150px] truncate" title={(child.authorizedEmails || []).join(", ")}>
                                             {(child.authorizedEmails || []).length > 0 ? (child.authorizedEmails || [])[0] + ((child.authorizedEmails || []).length > 1 ? "..." : "") : "-"}
                                         </TableCell>

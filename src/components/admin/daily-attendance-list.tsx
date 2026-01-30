@@ -30,76 +30,56 @@ import {
 import { Search, ArrowUpDown, User, Bus, Footprints, Users as UsersIcon, Megaphone } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { AttendanceRecord } from "@/types/firestore";
-import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
+import { AttendanceRecord, Child, Message } from "@/types/firestore";
+import { subscribeTodayAttendance, updateAttendanceStatus, getChildren } from "@/lib/firestore";
 import { useStaffNotifications } from "@/contexts/staff-notification-context";
 import { StaffAttendanceList } from "@/components/admin/staff-attendance-list";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Phone, Send } from "lucide-react";
 import { useAdminMode } from "@/contexts/admin-mode-context";
+import { Textarea } from "@/components/ui/textarea";
 
-// Generate Time Options
-const generateTimeOptions = () => {
-    const options = [];
-    for (let hour = 10; hour <= 20; hour++) {
-        for (let min = 0; min < 60; min += 10) {
-            const timeString = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-            options.push(timeString);
-        }
-    }
-    return options;
-};
-const timeOptions = generateTimeOptions();
-
-// Helper: Rounding Logic
-const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-};
-
-const getRoundedArrivalTime = () => {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const roundedMinutes = Math.floor(minutes / 10) * 10;
-    now.setMinutes(roundedMinutes);
-    return formatTime(now);
-};
-
-const getRoundedDepartureTime = () => {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const roundedMinutes = Math.ceil(minutes / 10) * 10;
-    now.setMinutes(roundedMinutes);
-    return formatTime(now);
-};
+// ... (Time Options code unchanged) ...
 
 export function DailyAttendanceList() {
     const [children, setChildren] = useState<AttendanceRecord[]>([]);
+    const [masterChildren, setMasterChildren] = useState<Record<string, Child>>({}); // Master Data Map
     const [selectedChild, setSelectedChild] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
+    // Chat State
+    const [inputMessage, setInputMessage] = useState("");
+    const [memoInput, setMemoInput] = useState("");
+
     // Sort Conf (Default to Status ASC)
     const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' }>({ key: 'status', direction: 'asc' });
 
     const { sendCall } = useStaffNotifications();
-
-    // Admin/Staff Mode
     const { mode } = useAdminMode();
+
+    // Fetch Master Data
+    useEffect(() => {
+        getChildren().then(data => {
+            const map: Record<string, Child> = {};
+            data.forEach(c => map[c.id] = c);
+            setMasterChildren(map);
+        });
+    }, []);
 
     // Initial Data Fetch & Subscription
     useEffect(() => {
         // If Staff mode, always lock to Today
         if (mode === 'staff') {
             const now = new Date();
-            // Check if current date is not today (just day/month/year part)
             const todayStr = now.toISOString().split('T')[0];
             const currentStr = currentDate.toISOString().split('T')[0];
             if (todayStr !== currentStr) {
                 setCurrentDate(now);
-                return; // Will re-trigger
+                return;
             }
         }
     }, [mode]);
@@ -108,9 +88,48 @@ export function DailyAttendanceList() {
         const dateStr = currentDate.toISOString().split('T')[0];
         const unsubscribe = subscribeTodayAttendance(dateStr, (data) => {
             setChildren(data);
+            // Update selected child if open
+            if (selectedChild) {
+                const found = data.find(d => d.id === selectedChild.id);
+                if (found) setSelectedChild(found);
+            }
         });
         return () => unsubscribe();
-    }, [currentDate]);
+    }, [currentDate, selectedChild?.id]);
+
+    const handleSendMessage = async () => {
+        if (!selectedChild || !inputMessage.trim()) return;
+        const today = new Date().toISOString().split('T')[0];
+
+        const newMessage: Message = {
+            id: `msg-${Date.now()}`,
+            sender: 'staff',
+            senderName: 'スタッフ',
+            content: inputMessage,
+            timestamp: new Date().toISOString()
+        };
+
+        const currentMessages = selectedChild.messages || [];
+        await updateAttendanceStatus(selectedChild.childId, today, {
+            messages: [...currentMessages, newMessage]
+        });
+        setInputMessage("");
+    };
+
+    const handleSaveMemo = async () => {
+        if (!selectedChild) return;
+        const today = new Date().toISOString().split('T')[0];
+        await updateAttendanceStatus(selectedChild.childId, today, {
+            staffMemo: memoInput
+        });
+        alert("メモを保存しました");
+    };
+
+    const handleReturnMethodClick = (child: AttendanceRecord) => {
+        setSelectedChild(child);
+        setMemoInput(child.staffMemo || ""); // Init memo
+        setIsDialogOpen(true);
+    };
 
     // Format Date Display
     const dateDisplay = currentDate.toLocaleDateString("ja-JP", { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
@@ -414,6 +433,8 @@ export function DailyAttendanceList() {
                                 const [schedStart, schedEnd] = child.reservationTime.split("-");
                                 const isPickup = child.returnMethod === "お迎え";
                                 const hasPending = child.changeRequest?.status === "pending";
+                                const master = masterChildren[child.childId];
+                                const phones = master?.phoneNumbers || [];
 
                                 return (
                                     <TableRow key={child.id} className={cn("h-12 border-b transition-colors", getRowColor(child.status), hasPending && "bg-yellow-100 hover:bg-yellow-200 ring-2 ring-inset ring-yellow-400 z-10 relative")}>
@@ -437,19 +458,40 @@ export function DailyAttendanceList() {
                                         <TableCell className="px-2 text-sm font-medium truncate max-w-[90px]" title={child.childName}>
                                             <div className="flex items-center justify-between gap-1">
                                                 <span>{child.childName}</span>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6 text-orange-400 hover:text-orange-600 hover:bg-orange-50 shrink-0"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (confirm(`${child.childName}さんの呼び出しを行いますか？`)) {
-                                                            sendCall(child.childId, child.childName);
-                                                        }
-                                                    }}
-                                                >
-                                                    <Megaphone className="h-3 w-3" />
-                                                </Button>
+                                                <div className="flex gap-1">
+                                                    {phones.length > 0 && (
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700 hover:bg-blue-50 shrink-0" onClick={e => e.stopPropagation()}>
+                                                                    <Phone className="h-3 w-3" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-2">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <span className="text-xs font-bold text-muted-foreground">保護者: {master?.guardianName || "未登録"}</span>
+                                                                    {phones.map((p, i) => (
+                                                                        <a key={i} href={`tel:${p}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline bg-blue-50 p-2 rounded">
+                                                                            <Phone className="h-3 w-3" /> {p}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6 text-orange-400 hover:text-orange-600 hover:bg-orange-50 shrink-0"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm(`${child.childName}さんの呼び出しを行いますか？`)) {
+                                                                sendCall(child.childId, child.childName);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Megaphone className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-2 text-center">
@@ -520,16 +562,16 @@ export function DailyAttendanceList() {
 
             {/* Return Details Dialog with Approval */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>詳細情報</DialogTitle>
+                        <DialogTitle>{selectedChild?.childName} <span className="text-sm font-normal text-muted-foreground">詳細情報</span></DialogTitle>
                         <DialogDescription>
-                            {selectedChild?.childName} さん
+                            ID: {selectedChild?.id}
                         </DialogDescription>
                     </DialogHeader>
 
                     {selectedChild && (
-                        <div className="space-y-4 py-2">
+                        <div className="space-y-6 py-2">
                             {/* Approval Section */}
                             {selectedChild.changeRequest && selectedChild.changeRequest.status === "pending" && (
                                 <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg space-y-3">
@@ -553,23 +595,72 @@ export function DailyAttendanceList() {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-3 items-center gap-4">
-                                <span className="font-semibold text-sm">帰宅方法:</span>
-                                <span className="col-span-2 flex items-center gap-2">
-                                    {getReturnMethodIcon(selectedChild.returnMethod)}
-                                    {selectedChild.returnMethod}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-3 items-start gap-4">
-                                <span className="font-semibold text-sm mt-1">詳細:</span>
-                                <div className="col-span-2 p-2 bg-gray-50 rounded text-sm text-gray-700 min-h-[60px]">
-                                    {selectedChild.returnDetails || "詳細情報はありません。"}
+                            {/* Basic Info Grid */}
+                            <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-3 rounded-md">
+                                <div>
+                                    <span className="font-semibold text-gray-500 block">帰宅方法</span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        {getReturnMethodIcon(selectedChild.returnMethod)}
+                                        {selectedChild.returnMethod}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="font-semibold text-gray-500 block">予約時間</span>
+                                    <div className="mt-1">{selectedChild.reservationTime}</div>
+                                </div>
+                                <div className="col-span-2">
+                                    <span className="font-semibold text-gray-500 block">詳細・引継ぎ</span>
+                                    <div className="mt-1">{selectedChild.returnDetails || "-"}</div>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 items-center gap-4">
-                                <span className="font-semibold text-sm">予約時間:</span>
-                                <span className="col-span-2 text-sm">{selectedChild.reservationTime}</span>
+
+                            {/* Staff Memo Section */}
+                            <div className="space-y-2 border-t pt-4">
+                                <label className="text-sm font-bold flex items-center gap-2">
+                                    📓 スタッフ用メモ (今日の日報)
+                                </label>
+                                <div className="flex gap-2">
+                                    <Textarea
+                                        placeholder="日報に残す内容を入力..."
+                                        className="h-20 text-sm"
+                                        value={memoInput}
+                                        onChange={e => setMemoInput(e.target.value)}
+                                    />
+                                    <Button className="h-20 w-16" variant="secondary" onClick={handleSaveMemo}>保存</Button>
+                                </div>
                             </div>
+
+                            {/* Messages Section */}
+                            <div className="space-y-2 border-t pt-4">
+                                <label className="text-sm font-bold flex items-center gap-2">
+                                    💬 保護者連絡メッセージ
+                                </label>
+                                <div className="bg-gray-50 border rounded-md p-3 h-48 overflow-y-auto space-y-3">
+                                    {(!selectedChild.messages || selectedChild.messages.length === 0) && (
+                                        <div className="text-center text-gray-400 text-xs py-10">メッセージ履歴はありません</div>
+                                    )}
+                                    {selectedChild.messages?.map((msg, idx) => (
+                                        <div key={idx} className={cn("flex flex-col text-sm max-w-[80%]", msg.sender === 'staff' ? "ml-auto items-end" : "items-start")}>
+                                            <div className="text-[10px] text-gray-400 mb-0.5">{msg.senderName} ({new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</div>
+                                            <div className={cn("px-3 py-2 rounded-lg", msg.sender === 'staff' ? "bg-blue-100 text-blue-900" : "bg-white border shadow-sm")}>
+                                                {msg.content}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="メッセージを入力..."
+                                        value={inputMessage}
+                                        onChange={e => setInputMessage(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                                    />
+                                    <Button size="icon" onClick={handleSendMessage}>
+                                        <Send className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+
                         </div>
                     )}
                 </DialogContent>

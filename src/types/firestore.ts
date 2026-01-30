@@ -17,6 +17,9 @@ export interface Child {
     kana: string;
     className: string; // e.g. "1-1"
     grade: number; // 1-6
+    address?: string; // New: Address for records
+    guardianName?: string; // New: Primary Guardian Name
+    phoneNumbers?: string[]; // New: List of contact numbers (Max 2)
     guardianId?: string; // ID of the primary guardian
     defaultReturnMethod?: string; // "お迎え" etc.
     snackConfig?: {
@@ -35,6 +38,14 @@ export interface AppDocument {
     createdAt: any;
 }
 
+export interface Message {
+    id: string;
+    sender: "guardian" | "staff";
+    senderName: string; // "Mother" or "Staff"
+    content: string;
+    timestamp: string; // ISO String
+}
+
 export interface AttendanceRecord {
     id: string; // Document ID
     date: string; // "YYYY-MM-DD"
@@ -47,7 +58,12 @@ export interface AttendanceRecord {
     reservationTime: string; // "14:00-17:00"
     returnMethod: string;
     returnDetails?: string | null;
-    memo?: string;
+    memo?: string; // Existing: Public memo or old field? Let's treat as "Admin Memo" or "Public"? 
+    // Let's migrate to using staffMemo for internal and messages for chat.
+    // For now, keep as is.
+
+    staffMemo?: string; // New: Internal memo for Daily Report
+    messages?: Message[]; // New: Chat log
 
     // Request logic
     changeRequest?: {
