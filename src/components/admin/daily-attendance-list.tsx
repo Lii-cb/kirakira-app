@@ -40,7 +40,30 @@ import { CalendarIcon, Phone, Send } from "lucide-react";
 import { useAdminMode } from "@/contexts/admin-mode-context";
 import { Textarea } from "@/components/ui/textarea";
 
-// ... (Time Options code unchanged) ...
+// Helpers
+const generateTimeOptions = () => {
+    const times = [];
+    for (let h = 13; h <= 19; h++) {
+        for (let m = 0; m < 60; m += 15) {
+            const hStr = h.toString().padStart(2, '0');
+            const mStr = m.toString().padStart(2, '0');
+            times.push(`${hStr}:${mStr}`);
+        }
+    }
+    return times;
+};
+const timeOptions = generateTimeOptions();
+
+const getRoundedTime = () => {
+    const now = new Date();
+    const minutes = Math.floor(now.getMinutes() / 5) * 5;
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = minutes.toString().padStart(2, '0');
+    return `${h}:${m}`;
+};
+
+const getRoundedArrivalTime = getRoundedTime;
+const getRoundedDepartureTime = getRoundedTime;
 
 export function DailyAttendanceList() {
     const [children, setChildren] = useState<AttendanceRecord[]>([]);
@@ -227,10 +250,7 @@ export function DailyAttendanceList() {
         });
     };
 
-    const handleReturnMethodClick = (child: AttendanceRecord) => {
-        setSelectedChild(child);
-        setIsDialogOpen(true);
-    };
+
 
     const getStatusBadge = (status: string) => {
         switch (status) {
