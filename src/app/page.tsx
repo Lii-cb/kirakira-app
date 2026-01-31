@@ -65,7 +65,7 @@ export default function Home() {
         </div>
 
         <div className="text-sm text-gray-400 pt-10">
-          Ver 3.1 | © 2025 きらきら学童クラブ
+          Ver 3.2 | © 2025 きらきら学童クラブ
         </div>
       </div>
     </div>
