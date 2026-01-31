@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings } from "lucide-react";
 import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
@@ -31,33 +33,35 @@ import { useState } from "react";
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const { mode, setMode } = useAdminMode(); // Use setMode instead of toggleMode
+    const router = useRouter();
+    const { mode, setMode } = useAdminMode();
+    const { role, loading } = useAuth();
 
-    // PIN Dialog State
-    const [isPinDialogOpen, setIsPinDialogOpen] = useState(false);
-    const [pinInput, setPinInput] = useState("");
-    const [pinError, setPinError] = useState(false);
+    // RBAC Check
+    useEffect(() => {
+        if (!loading) {
+            if (role !== 'admin' && role !== 'staff') {
+                router.push('/login');
+            }
+        }
+    }, [role, loading, router]);
 
     const handleModeSwitch = (checked: boolean) => {
+        if (role !== 'admin') {
+            alert("管理者権限が必要です。");
+            return;
+        }
+
         if (checked) {
-            // Switching TO Admin -> Require PIN
-            setIsPinDialogOpen(true);
-            setPinInput("");
-            setPinError(false);
+            setMode('admin');
         } else {
-            // Switching TO Staff -> No PIN required
             setMode('staff');
         }
     };
 
-    const handlePinSubmit = () => {
-        if (pinInput === "9999") {
-            setMode('admin');
-            setIsPinDialogOpen(false);
-        } else {
-            setPinError(true);
-        }
-    };
+    if (loading || (role !== 'admin' && role !== 'staff')) {
+        return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    }
 
     const navItems = [
         { href: "/admin/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
@@ -191,37 +195,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 </DropdownMenu>
             </nav>
 
-            {/* PIN Dialog */}
-            <Dialog open={isPinDialogOpen} onOpenChange={setIsPinDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>管理者モードへ切替</DialogTitle>
-                        <DialogDescription>
-                            PINコード（4桁）を入力してください。
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex items-center space-x-2">
-                        <Input
-                            type="password"
-                            placeholder="PINコード"
-                            value={pinInput}
-                            onChange={(e) => setPinInput(e.target.value)}
-                            maxLength={4}
-                            className={cn(pinError && "border-red-500 focus-visible:ring-red-500")}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") handlePinSubmit();
-                            }}
-                        />
-                    </div>
-                    {pinError && <p className="text-xs text-red-500 font-bold">コードが間違っています。</p>}
-                    <DialogFooter className="sm:justify-between">
-                        <div className="text-xs text-muted-foreground flex items-center">
-                            ヒント: 9999
-                        </div>
-                        <Button onClick={handlePinSubmit}>OK</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+
         </div>
     );
 }

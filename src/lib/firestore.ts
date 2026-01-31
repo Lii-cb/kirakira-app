@@ -17,7 +17,20 @@ import {
     runTransaction,
     documentId
 } from "firebase/firestore";
-import { AttendanceRecord, Child, Reservation, Application } from "@/types/firestore";
+import { AttendanceRecord, Child, Reservation, Application, SystemSettings } from "@/types/firestore";
+
+export const getSystemSettings = async (): Promise<SystemSettings> => {
+    const docRef = doc(db, "system_settings", "current");
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data() as SystemSettings;
+    }
+    // Fallback defaults
+    return {
+        id: "current",
+        fees: { basePrice: 3000, snackPrice: 100, extendedPrice: 100 }
+    };
+};
 
 // --- Children ---
 
@@ -291,6 +304,12 @@ export const updateStaff = async (id: string, data: Partial<Staff>) => {
 
 export const deleteStaff = async (id: string) => {
     await deleteDoc(doc(db, "staff", id));
+};
+
+export const getSyncedStaffList = async (): Promise<StaffUser[]> => {
+    const q = query(collection(db, "staff_users"), where("isActive", "==", true));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StaffUser));
 };
 
 // Helper to get ALL staff attendance for a specific month (for stats)

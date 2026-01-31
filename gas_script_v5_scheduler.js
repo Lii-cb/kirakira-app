@@ -1,10 +1,11 @@
 /**
  * gas_script_v5_scheduler.js
- * Ver 3.2: 児童・保護者連携 & メッセージ対応版
+ * Ver 3.3: 児童・保護者連携 & メッセージ・設定管理対応版
  * 
  * 機能:
  * 1. DailyReportシート: その日の出席データを追記 (毎日蓄積)
  * 2. Membersシート: 最新の児童マスタ情報を全書き換え (スナップショット)
+ * 3. Settingsシート, Staffシート: アプリ設定のマスタ管理
  * 
  * ライブラリID: "1VUSl4b1r1eoNcRWotZKkgeOMMXsJur4xmW_JeapV7iqqI3qTCX3UUVC7"
  */
@@ -18,10 +19,52 @@ const FIREBASE_CONFIG = {
 
 // ★ここを毎年変更してください★
 const SPREADSHEET_ID = "1fOUHIRKU39MFYW1iX5ZgNUQt3fyLHwDuOMF7B6-Xess"; // スプレッドシートID
+
 const SHEET_NAME_DAILY = "DailyReport";       // 日報用シート名
 const SHEET_NAME_MEMBERS = "Members";         // 児童マスタ用シート名
+const SHEET_NAME_SETTINGS = "Settings";       // 設定用シート名
+const SHEET_NAME_STAFF = "Staff";             // スタッフ管理用シート名
 
 const firestore = FirestoreApp.getFirestore(FIREBASE_CONFIG.email, FIREBASE_CONFIG.key, FIREBASE_CONFIG.projectId);
+
+// ==========================================
+// Main Entry Points (Triggers & Manual Runs)
+// ==========================================
+
+/**
+ * 初期セットアップ用 (Ver 3.3)
+ * Settings, Staffシートを作成し、初期データを同期します。
+ * 初回導入時に手動実行してください。
+ */
+function setupV5() {
+    console.log("Starting Setup V5...");
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // シートが無ければ作成
+    ensureSheet(ss, SHEET_NAME_SETTINGS, [["Key", "Value"]], [
+        ["fee_base_price", "3000"],
+        ["fee_snack_price", "100"],
+        ["fee_extended_price", "100"]
+    ]);
+
+    ensureSheet(ss, SHEET_NAME_STAFF, [["Name", "Email", "Role", "Active"]], [
+        ["管理者", "admin@example.com", "admin", "TRUE"]
+    ]);
+
+    // 初回同期
+    syncConfigToFirestore();
+    console.log("Setup V5 Completed.");
+}
+
+/**
+ * 設定・スタッフ情報の同期 (アプリへの反映)
+ * 手動実行 または 必要に応じてトリガー設定
+ */
+function syncConfigToFirestore() {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    syncSettings(ss);
+    syncStaff(ss);
+}
 
 /**
  * メイン連携関数
@@ -29,23 +72,126 @@ const firestore = FirestoreApp.getFirestore(FIREBASE_CONFIG.email, FIREBASE_CONF
  */
 function syncToSheets() {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
     // 1. 児童マスタの同期 (全洗い替え)
     syncMembers(ss);
-
     // 2. 日報の同期 (当日分の追記)
     syncDailyReport(ss);
 }
 
+// ==========================================
+// Individual Sync Functions
+// (Can be run manually from menu)
+// ==========================================
+
+/**
+ * 設定シート -> Firestore (system_settings)
+ */
+function syncSettings(ss) {
+    if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // シート確認・作成
+    let sheet = ss.getSheetByName(SHEET_NAME_SETTINGS);
+    if (!sheet) {
+        console.warn("Settings sheet not found during sync. Creating...");
+        setupV5(); // Re-run setup if missing
+        sheet = ss.getSheetByName(SHEET_NAME_SETTINGS);
+    }
+
+    const data = sheet.getDataRange().getValues();
+    // Default Settings Object
+    const settings = {
+        id: "current",
+        fees: {
+            basePrice: 0,
+            snackPrice: 0,
+            extendedPrice: 0
+        },
+        updatedAt: new Date().toISOString()
+    };
+
+    // Header skip (start from index 1)
+    for (let i = 1; i < data.length; i++) {
+        const key = data[i][0];
+        const val = data[i][1];
+        if (key === "fee_base_price") settings.fees.basePrice = Number(val);
+        if (key === "fee_snack_price") settings.fees.snackPrice = Number(val);
+        if (key === "fee_extended_price") settings.fees.extendedPrice = Number(val);
+    }
+
+    upsertDocument("system_settings/current", settings);
+    console.log("Settings synced.");
+}
+
+/**
+ * スタッフシート -> Firestore (staff_users)
+ */
+function syncStaff(ss) {
+    if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    let sheet = ss.getSheetByName(SHEET_NAME_STAFF);
+    if (!sheet) {
+        console.warn("Staff sheet not found during sync. Creating...");
+        setupV5();
+        sheet = ss.getSheetByName(SHEET_NAME_STAFF);
+    }
+
+    const data = sheet.getDataRange().getValues();
+
+    // Skip header
+    for (let i = 1; i < data.length; i++) {
+        const name = data[i][0];
+        const email = data[i][1];
+        const role = data[i][2] || "staff";
+        const active = data[i][3];
+
+        if (!email) continue;
+
+        // Email as ID (Sanitized for safe doc ID)
+        const docId = email.replace(/[.#$[\]]/g, "_");
+
+        const staffDoc = {
+            id: docId,
+            email: email,
+            name: name,
+            role: role,
+            isActive: active === true || active === "TRUE" || active === 1,
+            updatedAt: new Date().toISOString()
+        };
+
+        upsertDocument(`staff_users/${docId}`, staffDoc);
+    }
+    console.log("Staff synced.");
+}
+
+/**
+ * Helper: Create if new, Update if exists (Robust Upsert)
+ */
+function upsertDocument(path, data) {
+    try {
+        firestore.createDocument(path, data);
+    } catch (e) {
+        // "Document already exists" エラーなどが出た場合は Update を試みる
+        // エラーメッセージが "already exists" を含むかチェックしても良いが、
+        // 念のため update をトライするほうが確実
+        // console.log(`Document create failed (${e.message}), trying update: ${path}`);
+        try {
+            firestore.updateDocument(path, data);
+        } catch (e2) {
+            console.error(`Failed to upsert (create & update both failed): ${path}`, e2);
+            throw e2; // 両方失敗なら致命的エラーとして投げる
+        }
+    }
+}
+
 /**
  * 児童マスタの同期 (全洗い替え)
- * ヘッダー: ID, 学年, クラス, 氏名, フリガナ, 許可メール, 保護者名, 電話番号
  */
 function syncMembers(ss) {
+    if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
     let sheet = ss.getSheetByName(SHEET_NAME_MEMBERS);
     if (!sheet) {
         sheet = ss.insertSheet(SHEET_NAME_MEMBERS);
-        // ヘッダー作成
         sheet.getRange(1, 1, 1, 8).setValues([["ID", "学年", "クラス", "氏名", "フリガナ", "許可メール", "保護者名", "電話番号"]]);
     }
 
@@ -65,7 +211,7 @@ function syncMembers(ss) {
         c.kana || "",
         (c.authorizedEmails || []).join(","),
         c.guardianName || "",
-        (c.phoneNumbers || []).join(",") // 電話番号もカンマ区切りで
+        (c.phoneNumbers || []).join(",")
     ]);
 
     // クリアして書き込み
@@ -77,17 +223,18 @@ function syncMembers(ss) {
     if (rows.length > 0) {
         sheet.getRange(2, 1, rows.length, 8).setValues(rows);
     }
+    console.log("Members synced.");
 }
 
 /**
  * 日報の同期 (当日分の追記)
- * ヘッダー: 日付, 学年, クラス, 氏名, 出欠, 入室, 退室, 延長, おやつ, メモ
  */
 function syncDailyReport(ss) {
+    if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
     let sheet = ss.getSheetByName(SHEET_NAME_DAILY);
     if (!sheet) {
         sheet = ss.insertSheet(SHEET_NAME_DAILY);
-        // ヘッダー作成
         sheet.getRange(1, 1, 1, 10).setValues([["日付", "学年", "クラス", "氏名", "出欠", "入室", "退室", "延長", "おやつ", "メモ"]]);
     }
 
@@ -118,36 +265,38 @@ function syncDailyReport(ss) {
             r.departureTime || "",
             calculateExtension(r),
             r.snackConfig?.isExempt ? "無" : "有",
-            formatMemoField(r, c, today) // 新しいメモ整形関数
+            formatMemoField(r, c, today)
         ];
     });
 
     // 最下行に追記
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 10).setValues(rows);
+    console.log("Daily report synced.");
 }
 
-// --- ヘルパー関数 ---
+// ==========================================
+// Helpers
+// ==========================================
 
-/**
- * メモ欄の整形
- * (日付 児童名) スタッフメモ
- * (日付 児童名 保護者→スタッフ) メッセージ
- */
+function ensureSheet(ss, name, header, defaultRows) {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet) {
+        sheet = ss.insertSheet(name);
+        if (header) sheet.getRange(1, 1, 1, header[0].length).setValues(header);
+        if (defaultRows && defaultRows.length > 0) {
+            sheet.getRange(2, 1, defaultRows.length, defaultRows[0].length).setValues(defaultRows);
+        }
+    }
+    return sheet;
+}
+
 function formatMemoField(r, c, dateObj) {
     const parts = [];
     const dateShort = Utilities.formatDate(dateObj, "Asia/Tokyo", "M月d日");
 
-    // 1. 旧メモ (備考)
-    if (r.memo) {
-        parts.push(`(備考) ${r.memo}`);
-    }
+    if (r.memo) parts.push(`(備考) ${r.memo}`);
+    if (r.staffMemo) parts.push(`(${dateShort} ${c.name || ""}) ${r.staffMemo}`);
 
-    // 2. スタッフ用メモ
-    if (r.staffMemo) {
-        parts.push(`(${dateShort} ${c.name || ""}) ${r.staffMemo}`);
-    }
-
-    // 3. メッセージログ
     let messages = [];
     if (r.messages && r.messages.values && Array.isArray(r.messages.values)) {
         messages = r.messages.values.map(v => v.mapValue.fields);
@@ -160,13 +309,7 @@ function formatMemoField(r, c, dateObj) {
             const content = m.content || "";
             const sender = m.sender || "";
             const senderName = m.senderName || "ユーザー";
-
-            let context = "";
-            if (sender === "guardian") {
-                context = `${senderName}→スタッフ`;
-            } else {
-                context = `スタッフ→${c.guardianName || "保護者"}`;
-            }
+            const context = sender === "guardian" ? `${senderName}→スタッフ` : `スタッフ→${c.guardianName || "保護者"}`;
             parts.push(`(${dateShort} ${c.name || ""} ${context}) ${content}`);
         });
     }
@@ -191,7 +334,7 @@ function calculateExtension(r) {
  */
 function setupTriggers() {
     const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(t => ScriptApp.deleteTrigger(t)); // 既存のトリガーをリセット
+    triggers.forEach(t => ScriptApp.deleteTrigger(t));
 
     ScriptApp.newTrigger("syncToSheets").timeBased().atHour(8).nearMinute(30).everyDays(1).create();
     ScriptApp.newTrigger("syncToSheets").timeBased().atHour(18).nearMinute(30).everyDays(1).create();

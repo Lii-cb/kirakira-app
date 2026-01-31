@@ -2,6 +2,7 @@ import { Timestamp } from "firebase/firestore";
 
 export type Role = "admin" | "staff" | "guardian";
 
+
 export interface UserProfile {
     uid: string;
     email: string | null;
@@ -9,6 +10,26 @@ export interface UserProfile {
     role: Role;
     guardianId?: string; // Link to guardian profile if needed
     createdAt: Timestamp;
+}
+
+export interface StaffUser {
+    id: string; // Document ID (usually email or auto-id)
+    email: string;
+    name: string;
+    role: "admin" | "staff";
+    isActive: boolean;
+    createdAt?: any;
+    updatedAt?: any;
+}
+
+export interface SystemSettings {
+    id: "current"; // Singleton ID
+    fees: {
+        basePrice: number;
+        snackPrice: number;
+        extendedPrice: number;
+    };
+    updatedAt?: any;
 }
 
 export interface Child {

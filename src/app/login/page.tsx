@@ -1,55 +1,43 @@
 "use client";
 
-import { auth } from "@/lib/firebase/client";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Chrome } from "lucide-react";
+import { Chrome, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-
-import { UserProfile } from "@/types/firestore";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function LoginPage() {
     const router = useRouter();
+    const { login, user, role, loading } = useAuth();
     const [error, setError] = useState<string | null>(null);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+    useEffect(() => {
+        if (loading) return;
+
+        if (user && role) {
+            if (role === 'admin' || role === 'staff') {
+                router.push("/admin/dashboard");
+            } else if (role === 'guardian') {
+                router.push("/guardian/home");
+            } else if (role === 'guest') {
+                setError("このアカウントは登録されていません。管理者に連絡してください。");
+                setIsLoggingIn(false);
+            }
+        }
+    }, [user, role, loading, router]);
 
     const handleLogin = async () => {
         try {
             setError(null);
-            const provider = new GoogleAuthProvider();
-            // Force account selection to allow easy switching
-            provider.setCustomParameters({
-                prompt: "select_account"
-            });
-
-            const result = await signInWithPopup(auth, provider);
-            const user = result.user;
-
-            // Check if user exists in Firestore
-            const { doc, getDoc, setDoc, serverTimestamp } = await import("firebase/firestore");
-            const { db } = await import("@/lib/firebase/client");
-
-            const userRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userRef);
-
-            if (!userSnap.exists()) {
-                // Create new user with default role 'guardian'
-                const newUser: UserProfile = {
-                    uid: user.uid,
-                    email: user.email,
-                    fullName: user.displayName,
-                    role: "guardian",
-                    createdAt: serverTimestamp() as any, // Timestamp handling can be tricky, casting for now
-                };
-                await setDoc(userRef, newUser);
-            }
-
-            // Successful login
-            router.push("/dashboard");
+            setIsLoggingIn(true);
+            await login();
+            // Redirect handled by useEffect
         } catch (err: any) {
             console.error(err);
-            setError("ログインに失敗しました。管理者にお問い合わせください。");
+            setError("ログインに失敗しました。");
+            setIsLoggingIn(false);
         }
     };
 
@@ -57,25 +45,27 @@ export default function LoginPage() {
         <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
             <Card className="w-full max-w-md shadow-lg">
                 <CardHeader className="text-center">
-                    <CardTitle className="text-2xl font-bold">放課後児童クラブ</CardTitle>
-                    <CardDescription>保護者・職員用ログイン (Firebase)</CardDescription>
+                    <CardTitle className="text-2xl font-bold">きらきら学童クラブ</CardTitle>
+                    <CardDescription>統合ログイン (保護者・職員・管理者)</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     <Button
-                        className="w-full gap-2"
+                        className="w-full gap-2 py-6 text-lg"
                         size="lg"
                         onClick={handleLogin}
+                        disabled={isLoggingIn || (loading && !!user)}
                     >
-                        <Chrome className="h-5 w-5" />
+                        {isLoggingIn || (loading && !!user) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
                         Googleでログイン
                     </Button>
                     {error && (
-                        <div className="text-sm text-red-500 text-center font-bold">
+                        <div className="text-sm text-red-500 text-center font-bold bg-red-50 p-2 rounded">
                             {error}
                         </div>
                     )}
-                    <div className="text-xs text-center text-muted-foreground">
-                        ※管理事務所から許可されたアカウントのみ利用可能です。
+                    <div className="text-xs text-center text-muted-foreground mt-4">
+                        <p>保護者の方・職員の方・管理者の方すべて共通です。</p>
+                        <p>アカウントの権限に応じて自動的に画面が切り替わります。</p>
                     </div>
                 </CardContent>
             </Card>
