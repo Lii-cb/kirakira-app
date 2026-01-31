@@ -339,3 +339,81 @@ function setupTriggers() {
     ScriptApp.newTrigger("syncToSheets").timeBased().atHour(8).nearMinute(30).everyDays(1).create();
     ScriptApp.newTrigger("syncToSheets").timeBased().atHour(18).nearMinute(30).everyDays(1).create();
 }
+
+/**
+ * 入会申請フォーム連携 (Ver 3.4)
+ * フォームが送信されたときに実行されるトリガー関数
+ */
+function onFormSubmit(e) {
+    console.log("Form Submitted", JSON.stringify(e));
+    if (!e || !e.namedValues) {
+        console.error("No event data found.");
+        return;
+    }
+
+    const val = e.namedValues;
+
+    // Helper to get value safely (handles array from namedValues)
+    const getVal = (key) => {
+        return val[key] ? val[key][0] : "";
+    };
+
+    // マッピング (form_setup_guide.md に基づく)
+    const appData = {
+        childLastName: getVal("児童氏名（姓）"),
+        childFirstName: getVal("児童氏名（名）"),
+        childLastNameKana: getVal("児童氏名（せい）"),
+        childFirstNameKana: getVal("児童氏名（めい）"),
+        grade: getVal("新学年"),
+        guardianLastName: getVal("保護者氏名（姓）"),
+        guardianFirstName: getVal("保護者氏名（名）"),
+        phone: getVal("電話番号"),
+        email: getVal("連絡先メールアドレス"),
+        status: "new",
+        submissionDate: new Date().toISOString()
+    };
+
+    // 必須チェック（簡易）
+    if (!appData.childLastName || !appData.guardianLastName || !appData.email) {
+        console.warn("Invalid form data: Missing required fields", appData);
+        // エラーでもFirestoreに残す設計もアリだが、今回はSkip
+        return;
+    }
+
+    // Firestoreに保存
+    // IDは自動生成を使用
+    firestore.createDocument("applications", appData);
+    console.log("Application created in Firestore");
+}
+
+/**
+ * フォームトリガーの設定 (手動実行)
+ * 一度だけ実行してください。
+ */
+function setupFormTrigger() {
+    const triggers = ScriptApp.getProjectTriggers();
+
+    // 既存の onFormSubmit トリガーがあれば削除（重複防止）
+    triggers.forEach(t => {
+        if (t.getHandlerFunction() === "onFormSubmit") {
+            ScriptApp.deleteTrigger(t);
+        }
+    });
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+        // Apps Scriptエディタから直接実行した場合、ActiveSpreadsheetが取れないことがあるため
+        // ID指定で開くか、コンテナバインドされている前提
+        ScriptApp.newTrigger("onFormSubmit")
+            .forSpreadsheet(SpreadsheetApp.openById(SPREADSHEET_ID))
+            .onFormSubmit()
+            .create();
+    } else {
+        ScriptApp.newTrigger("onFormSubmit")
+            .forSpreadsheet(ss)
+            .onFormSubmit()
+            .create();
+    }
+
+    console.log("Form Trigger Set up.");
+}

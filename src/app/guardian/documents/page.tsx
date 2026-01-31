@@ -29,7 +29,6 @@ export default function GuardianDocumentsPage() {
     const getCategoryLabel = (cat: string) => {
         switch (cat) {
             case "news": return "お知らせ";
-            case "menu": return "献立表";
             case "event": return "イベント";
             case "other": return "その他";
             default: return cat;
@@ -39,7 +38,6 @@ export default function GuardianDocumentsPage() {
     const getCategoryColor = (cat: string) => {
         switch (cat) {
             case "news": return "bg-blue-100 text-blue-700 hover:bg-blue-100";
-            case "menu": return "bg-orange-100 text-orange-700 hover:bg-orange-100";
             case "event": return "bg-pink-100 text-pink-700 hover:bg-pink-100";
             default: return "bg-gray-100 text-gray-700 hover:bg-gray-100";
         }
@@ -64,9 +62,8 @@ export default function GuardianDocumentsPage() {
                         <Card key={doc.id} className="overflow-hidden">
                             <CardContent className="p-4 flex items-start gap-3">
                                 <div className="mt-1">
-                                    {doc.category === "menu" ? <FileText className="w-8 h-8 text-orange-500" /> :
-                                        doc.category === "event" ? <FileText className="w-8 h-8 text-pink-500" /> :
-                                            <FileText className="w-8 h-8 text-blue-500" />}
+                                    {doc.category === "event" ? <FileText className="w-8 h-8 text-pink-500" /> :
+                                        <FileText className="w-8 h-8 text-blue-500" />}
                                 </div>
                                 <div className="flex-1 space-y-1">
                                     <div className="flex items-center gap-2 mb-1">

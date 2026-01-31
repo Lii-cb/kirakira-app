@@ -29,6 +29,13 @@ export interface SystemSettings {
         snackPrice: number;
         extendedPrice: number;
     };
+    notifications?: {
+        emailEnabled: boolean;
+        lineEnabled: boolean;
+    };
+    features?: {
+        newReservationsEnabled: boolean;
+    };
     updatedAt?: any;
 }
 
@@ -52,10 +59,11 @@ export interface Child {
 export interface AppDocument {
     id: string;
     title: string;
-    category: "news" | "menu" | "event" | "other";
+    category: "news" | "event" | "other";
     url?: string; // External Link
     base64?: string; // Small file storage (MVP)
     fileName?: string;
+    eventDate?: string; // "YYYY-MM-DD" Use this for calendar events
     createdAt: any;
 }
 

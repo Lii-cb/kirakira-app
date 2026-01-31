@@ -163,8 +163,11 @@ export default function AdminUsersPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">児童・利用者名簿</h2>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight">児童・利用者名簿</h2>
+                    <p className="text-muted-foreground">CSVによる一括管理と個別の設定変更が可能です。</p>
+                </div>
                 <div className="flex gap-2">
                     <input
                         type="file"

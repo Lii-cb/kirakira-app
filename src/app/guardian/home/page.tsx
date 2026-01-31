@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, MessageCircle, AlertTriangle, Loader2, Home as HomeIcon, Clock, Moon } from "lucide-react";
-import { subscribeTodayAttendance, updateAttendanceStatus } from "@/lib/firestore";
+import { LogOut, MessageCircle, AlertTriangle, Loader2, Home as HomeIcon, Clock, Moon, Calendar as CalendarIcon } from "lucide-react";
+import { subscribeTodayAttendance, updateAttendanceStatus, getDocuments } from "@/lib/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs } from "firebase/firestore";
-import { AttendanceRecord, Child } from "@/types/firestore";
+import { AttendanceRecord, Child, AppDocument } from "@/types/firestore";
 import {
     Dialog,
     DialogContent,
@@ -24,6 +24,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Calendar } from "@/components/ui/calendar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function GuardianHomePage() {
     const [child, setChild] = useState<AttendanceRecord | null>(null);
@@ -32,6 +34,10 @@ export default function GuardianHomePage() {
     const [childId, setChildId] = useState<string | null>(null);
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const router = useRouter();
+
+    // Event Calendar State
+    const [date, setDate] = useState<Date | undefined>(new Date());
+    const [events, setEvents] = useState<AppDocument[]>([]);
 
     // Dialog States
     const [isAbsenceOpen, setIsAbsenceOpen] = useState(false);
@@ -69,6 +75,10 @@ export default function GuardianHomePage() {
                 setChildId(foundChildId);
                 setChildMaster(childDoc.data() as Child);
 
+                // Fetch Events
+                const docs = await getDocuments();
+                setEvents(docs.filter(d => d.category === "event" && d.eventDate));
+
             } catch (err) {
                 console.error("Error fetching child:", err);
                 setLoading(false);
@@ -94,13 +104,6 @@ export default function GuardianHomePage() {
     const handleAbsence = async () => {
         if (!childId) return;
         const today = new Date().toISOString().split('T')[0];
-
-        // If no record exists, Create is handled by backend or we need to handle it?
-        // updateAttendanceStatus creates if not exists usually? 
-        // Based on implementation, updateAttendanceStatus updates partial. 
-        // If record doesn't exist, we might need to handle it. 
-        // But for "Today", the scheduler creates it. 
-        // Or if it's "Future"? This page is "Home" = "Today".
 
         await updateAttendanceStatus(childId, today, {
             status: "absent",
@@ -148,10 +151,58 @@ export default function GuardianHomePage() {
         router.push("/");
     };
 
+
+
+    // ... existing code ...
+
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-blue-50">
-                <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+            <div className="min-h-screen bg-slate-50 pb-20">
+                {/* Header Skeleton */}
+                <header className="bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-600 p-1.5 rounded-lg opacity-50">
+                            <HomeIcon className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="font-bold text-gray-800">きらきら学童</span>
+                    </div>
+                    <Skeleton className="h-9 w-9 rounded-full" />
+                </header>
+
+                <main className="p-4 max-w-md mx-auto space-y-4">
+                    {/* Child Info Skeleton */}
+                    <Card className="border-none shadow-sm overflow-hidden">
+                        <div className="bg-blue-600/50 h-20 relative" />
+                        <div className="px-4 pb-4 mt-6">
+                            <Skeleton className="h-8 w-40 mb-2" />
+                            <Skeleton className="h-4 w-24" />
+                        </div>
+                    </Card>
+
+                    {/* Status Card Skeleton */}
+                    <Card className="border-none shadow-sm">
+                        <CardHeader className="pb-2">
+                            <Skeleton className="h-4 w-32" />
+                        </CardHeader>
+                        <CardContent>
+                            <Skeleton className="h-20 w-full mb-4 rounded-xl" />
+                            <div className="grid grid-cols-2 gap-3">
+                                <Skeleton className="h-16 w-full rounded-lg" />
+                                <Skeleton className="h-16 w-full rounded-lg" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Calendar Skeleton */}
+                    <Card className="border-none shadow-sm">
+                        <CardHeader className="pb-2">
+                            <Skeleton className="h-4 w-40" />
+                        </CardHeader>
+                        <CardContent>
+                            <Skeleton className="h-64 w-full rounded-md" />
+                        </CardContent>
+                    </Card>
+                </main>
             </div>
         );
     }
@@ -173,6 +224,14 @@ export default function GuardianHomePage() {
     const statusColor = isPresent ? "bg-green-100 text-green-700 border-green-200" :
         isLeft ? "bg-gray-100 text-gray-700 border-gray-200" :
             isAbsent ? "bg-red-100 text-red-700 border-red-200" : "bg-white border-gray-200";
+
+    // Calendar Helpers
+    const getEventsForDate = (day: Date) => {
+        const dateStr = day.toISOString().split('T')[0];
+        return events.filter(e => e.eventDate === dateStr);
+    };
+
+    const selectedEvents = date ? getEventsForDate(date) : [];
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20">
@@ -237,6 +296,56 @@ export default function GuardianHomePage() {
                             </div>
                             {child?.returnMethod === "お迎え" && (
                                 <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">お迎え待ち</Badge>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Event Calendar */}
+                <Card className="border-none shadow-sm">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                            <Calendar className="w-4 h-4" /> イベントカレンダー
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex justify-center">
+                            <Calendar
+                                mode="single"
+                                selected={date}
+                                onSelect={setDate}
+                                className="rounded-md border"
+                                modifiers={{
+                                    event: (date) => getEventsForDate(date).length > 0
+                                }}
+                                modifiersStyles={{
+                                    event: {
+                                        fontWeight: 'bold',
+                                        textDecoration: 'underline',
+                                        color: '#2563eb' // blue-600
+                                    }
+                                }}
+                            />
+                        </div>
+                        <div className="mt-4 bg-blue-50 p-3 rounded-lg min-h-[80px]">
+                            <h4 className="text-sm font-bold text-blue-800 mb-2">
+                                {date?.toLocaleDateString()} のイベント
+                            </h4>
+                            {selectedEvents.length > 0 ? (
+                                <ul className="space-y-2">
+                                    {selectedEvents.map(e => (
+                                        <li key={e.id} className="text-sm bg-white p-2 rounded shadow-sm border border-blue-100 flex items-center justify-between">
+                                            <span>{e.title}</span>
+                                            {e.url ? (
+                                                <a href={e.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">開く</a>
+                                            ) : e.base64 ? (
+                                                <a href={e.base64} download={e.fileName} className="text-xs text-green-600 underline">DL</a>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-blue-400">イベントはありません</p>
                             )}
                         </div>
                     </CardContent>

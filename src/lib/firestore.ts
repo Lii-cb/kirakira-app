@@ -17,7 +17,7 @@ import {
     runTransaction,
     documentId
 } from "firebase/firestore";
-import { AttendanceRecord, Child, Reservation, Application, SystemSettings } from "@/types/firestore";
+import { AttendanceRecord, Child, Reservation, Application, SystemSettings, StaffUser } from "@/types/firestore";
 
 export const getSystemSettings = async (): Promise<SystemSettings> => {
     const docRef = doc(db, "system_settings", "current");
@@ -28,8 +28,15 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
     // Fallback defaults
     return {
         id: "current",
-        fees: { basePrice: 3000, snackPrice: 100, extendedPrice: 100 }
+        fees: { basePrice: 3000, snackPrice: 100, extendedPrice: 100 },
+        notifications: { emailEnabled: true, lineEnabled: false },
+        features: { newReservationsEnabled: true }
     };
+};
+
+export const updateSystemSettings = async (data: Partial<SystemSettings>) => {
+    const docRef = doc(db, "system_settings", "current");
+    await setDoc(docRef, data, { merge: true });
 };
 
 // --- Children ---

@@ -33,7 +33,8 @@ export default function AdminDocumentsPage() {
 
     // Form State
     const [title, setTitle] = useState("");
-    const [category, setCategory] = useState<"news" | "menu" | "event" | "other">("news");
+    const [category, setCategory] = useState<"news" | "event" | "other">("news");
+    const [eventDate, setEventDate] = useState("");
     const [url, setUrl] = useState("");
     const [file, setFile] = useState<File | null>(null);
 
@@ -84,10 +85,12 @@ export default function AdminDocumentsPage() {
                 url,
                 base64: base64 || undefined,
                 fileName: fileName || undefined,
+                eventDate: category === "event" ? eventDate : undefined
             });
 
             // Reset
             setTitle("");
+            setEventDate("");
             setUrl("");
             setFile(null);
             setCategory("news");
@@ -150,12 +153,23 @@ export default function AdminDocumentsPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="news">お知らせ</SelectItem>
-                                        <SelectItem value="menu">献立表</SelectItem>
                                         <SelectItem value="event">イベント</SelectItem>
                                         <SelectItem value="other">その他</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
+
+                            {category === "event" && (
+                                <div className="space-y-2">
+                                    <Label>イベント開催日</Label>
+                                    <Input
+                                        type="date"
+                                        value={eventDate}
+                                        onChange={(e) => setEventDate(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                            )}
 
                             <Tabs defaultValue="file" className="w-full">
                                 <TabsList className="grid w-full grid-cols-2">
@@ -211,11 +225,9 @@ export default function AdminDocumentsPage() {
                                             <TableCell>
                                                 <Badge variant="outline" className={
                                                     doc.category === "news" ? "bg-blue-50 text-blue-700" :
-                                                        doc.category === "menu" ? "bg-orange-50 text-orange-700" :
-                                                            doc.category === "event" ? "bg-pink-50 text-pink-700" : ""
+                                                        doc.category === "event" ? "bg-pink-50 text-pink-700" : ""
                                                 }>
                                                     {doc.category === "news" && "お知らせ"}
-                                                    {doc.category === "menu" && "献立表"}
                                                     {doc.category === "event" && "イベント"}
                                                     {doc.category === "other" && "その他"}
                                                 </Badge>
