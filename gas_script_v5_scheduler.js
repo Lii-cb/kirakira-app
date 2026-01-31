@@ -1,11 +1,12 @@
 /**
  * gas_script_v5_scheduler.js
- * Ver 3.3: 児童・保護者連携 & メッセージ・設定管理対応版
+ * Ver 3.5: 児童・保護者連携 & メッセージ・設定管理対応 & 入会取り込み版
  * 
  * 機能:
  * 1. DailyReportシート: その日の出席データを追記 (毎日蓄積)
  * 2. Membersシート: 最新の児童マスタ情報を全書き換え (スナップショット)
  * 3. Settingsシート, Staffシート: アプリ設定のマスタ管理
+ * 4. Importシート: 新規入会者の取り込み (New)
  * 
  * ライブラリID: "1VUSl4b1r1eoNcRWotZKkgeOMMXsJur4xmW_JeapV7iqqI3qTCX3UUVC7"
  */
@@ -80,7 +81,6 @@ function syncToSheets() {
 
 // ==========================================
 // Individual Sync Functions
-// (Can be run manually from menu)
 // ==========================================
 
 /**
@@ -109,7 +109,7 @@ function syncSettings(ss) {
         updatedAt: new Date().toISOString()
     };
 
-    // Header skip (start from index 1)
+    // ヘッダーをスキップ（インデックス1から開始）
     for (let i = 1; i < data.length; i++) {
         const key = data[i][0];
         const val = data[i][1];
@@ -137,7 +137,7 @@ function syncStaff(ss) {
 
     const data = sheet.getDataRange().getValues();
 
-    // Skip header
+    // ヘッダーをスキップ
     for (let i = 1; i < data.length; i++) {
         const name = data[i][0];
         const email = data[i][1];
@@ -146,7 +146,7 @@ function syncStaff(ss) {
 
         if (!email) continue;
 
-        // Email as ID (Sanitized for safe doc ID)
+        // メールアドレスをIDとして使用（ドキュメントIDとして安全な形式に変換）
         const docId = email.replace(/[.#$[\]]/g, "_");
 
         const staffDoc = {
@@ -164,21 +164,18 @@ function syncStaff(ss) {
 }
 
 /**
- * Helper: Create if new, Update if exists (Robust Upsert)
+ * ヘルパー: 新規作成、存在すれば更新 (Upsert)
  */
 function upsertDocument(path, data) {
     try {
         firestore.createDocument(path, data);
     } catch (e) {
         // "Document already exists" エラーなどが出た場合は Update を試みる
-        // エラーメッセージが "already exists" を含むかチェックしても良いが、
-        // 念のため update をトライするほうが確実
-        // console.log(`Document create failed (${e.message}), trying update: ${path}`);
         try {
             firestore.updateDocument(path, data);
         } catch (e2) {
             console.error(`Failed to upsert (create & update both failed): ${path}`, e2);
-            throw e2; // 両方失敗なら致命的エラーとして投げる
+            throw e2;
         }
     }
 }
@@ -341,79 +338,108 @@ function setupTriggers() {
 }
 
 /**
- * 入会申請フォーム連携 (Ver 3.4)
- * フォームが送信されたときに実行されるトリガー関数
+ * 新入会取り込み (Ver 3.5)
+ * Importシートに入力されたデータをFirestoreのchildrenコレクションに登録します。
+ * 登録後、シートのステータス列を「完了」に更新します。
  */
-function onFormSubmit(e) {
-    console.log("Form Submitted", JSON.stringify(e));
-    if (!e || !e.namedValues) {
-        console.error("No event data found.");
+function importNewMembers(ss) {
+    if (!ss || !ss.getSheetByName) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    let sheet = ss.getSheetByName("Import");
+    if (!sheet) {
+        // シートが無ければ作成し、ヘッダーとサンプルデータを設定
+        sheet = ss.insertSheet("Import");
+        sheet.getRange(1, 1, 1, 9).setValues([["児童姓", "児童名", "児童姓カナ", "児童名カナ", "学年", "クラス", "保護者名", "連絡先メール", "ステータス"]]);
+        sheet.getRange(2, 1, 1, 9).setValues([["山田", "太郎", "ヤマダ", "タロウ", "1", "1-1", "山田 花子", "user@example.com", ""]]);
+        console.log("Created Import sheet.");
+        return; // 作成直後は処理しない（ユーザーが入力を完了していないため）
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    // 列インデックスの特定
+    const idx = {
+        lName: headers.indexOf("児童姓"),
+        fName: headers.indexOf("児童名"),
+        lNameKana: headers.indexOf("児童姓カナ"),
+        fNameKana: headers.indexOf("児童名カナ"),
+        grade: headers.indexOf("学年"),
+        className: headers.indexOf("クラス"),
+        gName: headers.indexOf("保護者名"),
+        email: headers.indexOf("連絡先メール"),
+        status: headers.indexOf("ステータス")
+    };
+
+    if (idx.email === -1) {
+        console.error("Import sheet format invalid.");
         return;
     }
 
-    const val = e.namedValues;
+    const updates = [];
 
-    // Helper to get value safely (handles array from namedValues)
-    const getVal = (key) => {
-        return val[key] ? val[key][0] : "";
-    };
+    // 1行目（ヘッダー）はスキップ
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (row[idx.status] === "完了") continue; // 処理済みはスキップ
+        if (!row[idx.email] || !row[idx.lName]) continue; // 必須項目チェック
 
-    // マッピング (form_setup_guide.md に基づく)
-    const appData = {
-        childLastName: getVal("児童氏名（姓）"),
-        childFirstName: getVal("児童氏名（名）"),
-        childLastNameKana: getVal("児童氏名（せい）"),
-        childFirstNameKana: getVal("児童氏名（めい）"),
-        grade: getVal("新学年"),
-        guardianLastName: getVal("保護者氏名（姓）"),
-        guardianFirstName: getVal("保護者氏名（名）"),
-        phone: getVal("電話番号"),
-        email: getVal("連絡先メールアドレス"),
-        status: "new",
-        submissionDate: new Date().toISOString()
-    };
+        // ID生成: メールアドレス_タイムスタンプ（重複防止）
+        // メールアドレス自体をIDにすると、兄弟姉妹の登録で重複する可能性があるためタイムスタンプ付与
+        const timestamp = new Date().getTime().toString().substring(8);
+        const docId = `child_${timestamp}_${Math.floor(Math.random() * 1000)}`;
 
-    // 必須チェック（簡易）
-    if (!appData.childLastName || !appData.guardianLastName || !appData.email) {
-        console.warn("Invalid form data: Missing required fields", appData);
-        // エラーでもFirestoreに残す設計もアリだが、今回はSkip
-        return;
+        const childData = {
+            id: docId,
+            name: `${row[idx.lName]} ${row[idx.fName]}`,
+            kana: `${row[idx.lNameKana]} ${row[idx.fNameKana]}`,
+            grade: Number(row[idx.grade]),
+            className: row[idx.className],
+            guardianName: row[idx.gName],
+            authorizedEmails: [row[idx.email]], // ここでログイン権限を設定
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            firestore.createDocument("children", childData);
+            // 更新成功したらステータスを更新
+            updates.push({ row: i + 1, col: idx.status + 1, val: "完了" });
+        } catch (e) {
+            console.error("Failed to import row " + i, e);
+            updates.push({ row: i + 1, col: idx.status + 1, val: "エラー: " + e.message });
+        }
     }
 
-    // Firestoreに保存
-    // IDは自動生成を使用
-    firestore.createDocument("applications", appData);
-    console.log("Application created in Firestore");
+    // ステータスを一括更新
+    updates.forEach(u => {
+        sheet.getRange(u.row, u.col).setValue(u.val);
+    });
+
+    if (updates.length > 0) {
+        console.log(`Imported ${updates.length} members.`);
+        // Membersシート（アプリ内マスタ）も更新しておく
+        syncMembers(ss);
+    }
 }
 
 /**
- * フォームトリガーの設定 (手動実行)
- * 一度だけ実行してください。
+ * Importトリガーの設定 (手動実行)
+ * 1時間ごとに実行して新規登録をチェックします
  */
-function setupFormTrigger() {
+function setupImportTrigger() {
     const triggers = ScriptApp.getProjectTriggers();
 
-    // 既存の onFormSubmit トリガーがあれば削除（重複防止）
+    // 重複削除
     triggers.forEach(t => {
-        if (t.getHandlerFunction() === "onFormSubmit") {
+        if (t.getHandlerFunction() === "importNewMembers") {
             ScriptApp.deleteTrigger(t);
         }
     });
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-        // Apps Scriptエディタから直接実行した場合、ActiveSpreadsheetが取れないことがあるため
-        // ID指定で開くか、コンテナバインドされている前提
-        ScriptApp.newTrigger("onFormSubmit")
-            .forSpreadsheet(SpreadsheetApp.openById(SPREADSHEET_ID))
-            .onFormSubmit()
-            .create();
-    } else {
-        ScriptApp.newTrigger("onFormSubmit")
-            .forSpreadsheet(ss)
-            .onFormSubmit()
-            .create();
-    }
+    ScriptApp.newTrigger("importNewMembers")
+        .timeBased()
+        .everyHours(1)
+        .create();
 
-    console.log("Form Trigger Set up.");
+    console.log("Import Trigger Set up.");
 }
