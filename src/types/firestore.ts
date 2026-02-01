@@ -22,6 +22,13 @@ export interface StaffUser {
     updatedAt?: any;
 }
 
+export interface StaffMemo {
+    id: string; // "YYYY-MM-DD"
+    content: string;
+    updatedAt: any;
+    updatedBy: string; // Staff Name
+}
+
 export interface SystemSettings {
     id: "current"; // Singleton ID
     fees: {

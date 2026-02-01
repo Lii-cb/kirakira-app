@@ -361,13 +361,18 @@ export const getMonthlyStaffAttendance = async (year: number, month: number) => 
 
 // --- Staff Attendance ---
 
-export type StaffStatus = 'work' | 'temp_out' | 'left' | 'absent';
+// --- Staff Attendance ---
+
+export type StaffStatus = 'work' | 'temp_out' | 'left' | 'absent' | 'planned';
 
 export interface StaffState {
     id: string;
     name: string;
     status: StaffStatus;
-    time: string; // HH:mm
+    shiftTime?: string; // Planned Start Time (HH:mm)
+    time: string; // Current Status Time (Last Action Time)
+    actualTime?: string; // Work Start Time
+    actualEndTime?: string; // Work End Time
 }
 
 export const subscribeStaffAttendance = (date: string, callback: (staff: StaffState[]) => void) => {
@@ -385,7 +390,6 @@ export const subscribeStaffAttendance = (date: string, callback: (staff: StaffSt
 export const updateStaffStatus = async (date: string, staff: StaffState) => {
     const docRef = doc(db, "staff_daily", date);
     try {
-        // Using runTransaction for atomic updates on the array
         await runTransaction(db, async (transaction) => {
             const sfDoc = await transaction.get(docRef);
             let list: StaffState[] = [];
@@ -430,14 +434,22 @@ export const removeStaffMember = async (date: string, staffId: string) => {
 };
 
 // Batch register staff shifts
-export const registerStaffShifts = async (name: string, dates: Date[], time: string = '--:--', staffId?: string) => {
+export const registerStaffShifts = async (name: string, dates: Date[], shiftTime: string = '14:00', staffId?: string) => {
     const promises = dates.map(async (date) => {
         const dateStr = date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-');
+
+        // We need to check if record exists to merge, but updateStaffStatus does array replacement.
+        // Ideally we should check if staff already exists in that day's list.
+        // For simplicity, we assume we are adding/updating.
+        // But since we use array replacement in updateStaffStatus, we can just call it.
+        // Wait, updateStaffStatus uses "id" to find match.
+
         const newStaff: StaffState = {
             id: staffId || `staff-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name,
-            status: 'absent',
-            time: time
+            status: 'planned', // New status for shift only
+            shiftTime: shiftTime,
+            time: '--:--'
         };
         await updateStaffStatus(dateStr, newStaff);
     });
@@ -500,4 +512,24 @@ export const addDocument = async (docData: Omit<AppDocument, "id" | "createdAt">
 
 export const deleteDocument = async (id: string) => {
     await deleteDoc(doc(db, "documents", id));
+};
+
+// --- Staff Memos ---
+
+export const getStaffMemo = async (date: string): Promise<string> => {
+    const docRef = doc(db, "staff_memos", date);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data().content || "";
+    }
+    return "";
+};
+
+export const updateStaffMemo = async (date: string, content: string, staffName: string = "Admin") => {
+    const docRef = doc(db, "staff_memos", date);
+    await setDoc(docRef, {
+        content,
+        updatedBy: staffName,
+        updatedAt: serverTimestamp()
+    }, { merge: true });
 };
