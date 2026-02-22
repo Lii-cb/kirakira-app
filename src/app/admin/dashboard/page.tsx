@@ -19,9 +19,11 @@ export default function AdminDashboardPage() {
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-end">
-                <Button variant="outline" size="sm" onClick={handleSeed}>初期データ投入 (Dev)</Button>
-            </div>
+            {process.env.NODE_ENV === 'development' && (
+                <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={handleSeed}>初期データ投入 (Dev)</Button>
+                </div>
+            )}
             {/* Daily Attendance List */}
             <DailyAttendanceList />
         </div>

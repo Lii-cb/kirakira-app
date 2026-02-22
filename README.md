@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kirakira App Ver 7.1
 
-## Getting Started
+学童保育管理システム
 
-First, run the development server:
+## 概要
+
+保護者、スタッフ、管理者向けの包括的な学童保育管理プラットフォーム。
+
+## 主な機能
+
+### 保護者向け
+- 保護者ポータル（ログイン、ホーム画面）
+- 出席確認・予約管理
+- スタッフとのメッセージング
+- ドキュメント閲覧
+- 支払い管理
+
+### スタッフ・管理者向け
+- 出席管理ダッシュボード
+- 児童情報管理
+- 予約・スケジュール管理
+- レポート生成
+- CSV インポート/エクスポート
+
+## 技術スタック
+
+- **フロントエンド:** Next.js 15, React, TypeScript
+- **スタイリング:** Tailwind CSS
+- **バックエンド:** Firebase (Firestore, Authentication, Hosting)
+- **データ同期:** Google Apps Script (Spreadsheet連携)
+- **UI コンポーネント:** shadcn/ui, Lucide Icons
+
+## セットアップ
+
+### 前提条件
+- Node.js 18+
+- Firebase プロジェクト
+- Google Spreadsheet（データ同期用）
+
+### インストール
+
+```bash
+# 依存関係のインストール
+npm install
+
+# 環境変数の設定
+cp .env.local.example .env.local
+# .env.local を編集して Firebase 設定を追加
+```
+
+### 開発サーバー
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ブラウザで http://localhost:3000 を開く
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## デプロイ
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Firebase Hosting
 
-## Learn More
+```bash
+# ビルド（オプション）
+npm run build
 
-To learn more about Next.js, take a look at the following resources:
+# デプロイ
+firebase deploy --only hosting
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Firestore Security Rules
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+firebase deploy --only firestore:rules
+```
 
-## Deploy on Vercel
+## プロジェクト構造
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/              # Next.js App Router ページ
+│   ├── admin/        # 管理画面
+│   ├── parent/       # 保護者ポータル
+│   ├── dashboard/    # ダッシュボード
+│   └── login/        # ログイン
+├── components/       # React コンポーネント
+│   ├── admin/        # 管理用コンポーネント
+│   └── ui/           # 共通 UI コンポーネント
+├── contexts/         # React Context
+├── lib/              # ユーティリティ
+│   └── firebase/     # Firebase 設定
+└── types/            # TypeScript 型定義
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## バージョン履歴
+
+### Ver 7.1 (2026-02-10)
+- **Guardian → Parent リネーム完了**
+  - 用語の統一（Guardian → Parent）
+  - `parents` コレクション作成
+  - Security Rules 更新
+  - GAS スクリプト Ver 7.1 デプロイ
+
+### Ver 6.3 (2026-01)
+- GAS 統合、データ同期機能
+- 管理画面改善
+
+### Ver 6.1
+- 基本機能実装
+
+## ライセンス
+
+Private
+
+## サポート
+
+問題が発生した場合は、プロジェクト管理者に連絡してください。

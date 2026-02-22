@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { getSystemSettings, updateSystemSettings } from "@/lib/firestore";
 import { SystemSettings } from "@/types/firestore";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function AdminSettingsPage() {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -42,7 +42,6 @@ export default function AdminSettingsPage() {
                 ...newSettings.notifications,
                 [key]: value,
                 emailEnabled: newSettings.notifications?.emailEnabled ?? true,
-                lineEnabled: newSettings.notifications?.lineEnabled ?? false
             };
         } else if (section === "features") {
             newSettings.features = {
@@ -63,7 +62,7 @@ export default function AdminSettingsPage() {
         }
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading) return <div className="flex justify-center p-10"><Spinner /></div>;
 
     return (
         <div className="space-y-6">
@@ -104,9 +103,7 @@ export default function AdminSettingsPage() {
                                 <li>スクリプトにキーを貼り付けて実行</li>
                             </ol>
                         </div>
-                        <Button variant="outline" className="w-full" onClick={() => window.open('/SPREADSHEET_INTEGRATION.md', '_blank')}>
-                            詳細な手順書を開く
-                        </Button>
+                        <p className="text-xs text-muted-foreground mt-2">※ 詳細な設定手順は管理者にお問い合わせください。</p>
                     </CardContent>
                 </Card>
 
@@ -126,17 +123,7 @@ export default function AdminSettingsPage() {
                                 onCheckedChange={(c) => handleToggle("notifications", "emailEnabled", c)}
                             />
                         </div>
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label>LINE連携</Label>
-                                <div className="text-sm text-muted-foreground">LINEでの通知を有効にする（現在は無効）</div>
-                            </div>
-                            <Switch
-                                checked={settings?.notifications?.lineEnabled ?? false}
-                                onCheckedChange={(c) => handleToggle("notifications", "lineEnabled", c)}
-                                disabled // Future feature
-                            />
-                        </div>
+                        {/* 
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <Label>新規予約受付</Label>
@@ -147,6 +134,40 @@ export default function AdminSettingsPage() {
                                 onCheckedChange={(c) => handleToggle("features", "newReservationsEnabled", c)}
                             />
                         </div>
+                        */}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>管理者モード切替 PIN</CardTitle>
+                        <CardDescription>管理者モードへ切り替える際のPINコードを設定します</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <div className="flex-1 space-y-1">
+                                <Label htmlFor="adminPin">PINコード</Label>
+                                <Input
+                                    id="adminPin"
+                                    type="password"
+                                    defaultValue={settings?.adminPin || ""}
+                                    placeholder="4桁以上の数字"
+                                    onBlur={async (e) => {
+                                        const pin = e.target.value.trim();
+                                        if (pin && pin.length >= 4) {
+                                            try {
+                                                await updateSystemSettings({ adminPin: pin });
+                                                alert("PINを更新しました。");
+                                            } catch (error) {
+                                                console.error(error);
+                                                alert("PINの更新に失敗しました。");
+                                            }
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">※ スプレッドシートのSettingsシートからも設定可能です。</p>
                     </CardContent>
                 </Card>
             </div>

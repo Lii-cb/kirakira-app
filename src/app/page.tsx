@@ -33,7 +33,7 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href="/guardian/login">
+              <Link href="/parent/login">
                 <Button className="w-full h-12 text-lg group">
                   保護者ログイン
                   <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
@@ -65,7 +65,7 @@ export default function Home() {
         </div>
 
         <div className="text-sm text-gray-400 pt-10">
-          Ver 3.2 | © 2025 きらきら学童クラブ
+          Ver 7.3 | © 2026 きらきら学童クラブ
         </div>
       </div>
     </div>

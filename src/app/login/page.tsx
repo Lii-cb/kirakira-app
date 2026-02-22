@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Chrome, Loader2 } from "lucide-react";
+import { Chrome } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
@@ -19,8 +19,8 @@ export default function LoginPage() {
         if (user && role) {
             if (role === 'admin' || role === 'staff') {
                 router.push("/admin/dashboard");
-            } else if (role === 'guardian') {
-                router.push("/guardian/home");
+            } else if (role === 'parent') {
+                router.push("/parent/home");
             } else if (role === 'guest') {
                 setError("このアカウントは登録されていません。管理者に連絡してください。");
                 setIsLoggingIn(false);
@@ -34,7 +34,7 @@ export default function LoginPage() {
             setIsLoggingIn(true);
             await login();
             // Redirect handled by useEffect
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
             setError("ログインに失敗しました。");
             setIsLoggingIn(false);
@@ -55,7 +55,7 @@ export default function LoginPage() {
                         onClick={handleLogin}
                         disabled={isLoggingIn || (loading && !!user)}
                     >
-                        {isLoggingIn || (loading && !!user) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
+                        {isLoggingIn || (loading && !!user) ? <span className="mr-2">...</span> : <Chrome className="h-5 w-5" />}
                         Googleでログイン
                     </Button>
                     {error && (

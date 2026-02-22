@@ -50,12 +50,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         const staffData = staffDoc.data() as StaffUser;
                         setRole(staffData.role); // "admin" or "staff"
                     } else {
-                        // 2. Check Guardian
-                        const q = query(collection(db, "children"), where("authorizedEmails", "array-contains", email));
-                        const snapshot = await getDocs(q);
+                        // 2. Check Parent (Ver 7.1: Use parents collection)
+                        const parentQuery = query(collection(db, "parents"), where("email", "==", email));
+                        const parentSnapshot = await getDocs(parentQuery);
 
-                        if (!snapshot.empty) {
-                            setRole("guardian");
+                        if (!parentSnapshot.empty) {
+                            setRole("parent");
                         } else {
                             setRole("guest");
                         }

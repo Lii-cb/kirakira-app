@@ -7,7 +7,10 @@ import { useAuth } from "@/contexts/auth-context";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
+import { auth } from "@/lib/firebase/client";
+import { getSystemSettings } from "@/lib/firestore";
 import { StaffNotificationToast } from "@/components/admin/staff-notification-toast";
 import {
     DropdownMenu,
@@ -46,28 +49,47 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         }
     }, [role, loading, router]);
 
-    const handleModeSwitch = (checked: boolean) => {
+    const handleModeSwitch = async (checked: boolean) => {
         if (role !== 'admin') {
             alert("管理者権限が必要です。");
             return;
         }
 
         if (checked) {
-            setMode('admin');
+            // Switching to admin mode — require PIN
+            try {
+                const settings = await getSystemSettings();
+                const storedPin = settings?.adminPin;
+                if (storedPin) {
+                    const inputPin = prompt("管理者PINを入力してください:");
+                    if (inputPin !== storedPin) {
+                        alert("PINが正しくありません。");
+                        return;
+                    }
+                }
+                setMode('admin');
+            } catch (error) {
+                console.error("Failed to fetch PIN:", error);
+                alert("設定の取得に失敗しました。");
+            }
         } else {
             setMode('staff');
         }
     };
 
     if (loading || (role !== 'admin' && role !== 'staff')) {
-        return <div className="flex h-screen items-center justify-center">Loading...</div>;
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <Spinner className="text-blue-500" />
+            </div>
+        );
     }
 
     const navItems = [
         { href: "/admin/dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-        { href: "/admin/applications", label: "入会申請", icon: FileText },
+        // { href: "/admin/applications", label: "入会申請", icon: FileText }, // Removed
         { href: "/admin/calendar", label: "予約台帳", icon: Calendar },
-        { href: "/admin/users", label: "児童・利用者", icon: Users },
+        { href: "/admin/users", label: "児童名簿", icon: Users },
         { href: "/admin/finance", label: "金銭管理", icon: Banknote },
         { href: "/admin/documents", label: "書類管理", icon: FileText },
         { href: "/admin/staff", label: "職員管理", icon: Users },
@@ -79,10 +101,10 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r hidden md:flex flex-col">
                 <div className="p-6 border-b">
-                    <h1 className="text-xl font-bold tracking-tight text-primary">KiraKira Manager</h1>
+                    <h1 className="text-xl font-bold tracking-tight text-primary">きらきら児童クラブ管理</h1>
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver3.0</p>
-                        <p className="text-[10px] text-muted-foreground/80">放課後児童クラブ管理</p>
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver 7.3</p>
+                        <p className="text-[10px] text-muted-foreground/80">ゆめの森放課後児童クラブ</p>
                     </div>
                     <div className="flex items-center space-x-2 mt-4 bg-gray-50 p-2 rounded-md border">
                         <Switch id="mode-toggle" checked={mode === 'admin'} onCheckedChange={handleModeSwitch} />
@@ -105,13 +127,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     ))}
                 </nav>
                 <div className="p-4 border-t space-y-2 flex-shrink-0">
-                    <Link href="/guardian/home">
+                    <Link href="/parent/home">
                         <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground hover:text-primary">
                             <Users className="h-4 w-4" />
                             保護者画面へ
                         </Button>
                     </Link>
-                    <Button variant="ghost" className="w-full justify-start gap-2 text-red-500 hover:text-red-600 hover:bg-red-50">
+                    <Button variant="ghost" className="w-full justify-start gap-2 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => { auth.signOut(); router.push('/'); }}>
                         <LogOut className="h-4 w-4" />
                         ログアウト
                     </Button>
@@ -121,7 +143,14 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden mb-16 md:mb-0">
                 <StaffNotificationProvider>
-                    {/* Mobile Header (TODO) */}
+                    {/* Mobile Header */}
+                    <div className="md:hidden flex items-center justify-between px-4 py-3 border-b bg-white sticky top-0 z-40">
+                        <h1 className="text-sm font-bold text-primary">きらきら管理</h1>
+                        <span className="text-sm font-medium text-muted-foreground">
+                            {navItems.find(item => pathname.startsWith(item.href))?.label || "管理画面"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">Ver 7.3</span>
+                    </div>
                     <div className="flex-1 overflow-auto p-4 md:p-8">
                         {children}
                     </div>
@@ -161,14 +190,14 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                                 </Label>
                             </div>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
+                        {/* <DropdownMenuItem asChild>
                             <Link href="/admin/applications" className="w-full flex items-center p-2 cursor-pointer">
                                 <FileText className="h-4 w-4 mr-2" /> 入会申請
                             </Link>
-                        </DropdownMenuItem>
+                        </DropdownMenuItem> */}
                         <DropdownMenuItem asChild>
                             <Link href="/admin/users" className="w-full flex items-center p-2 cursor-pointer">
-                                <Users className="h-4 w-4 mr-2" /> 児童・利用者
+                                <Users className="h-4 w-4 mr-2" /> 児童名簿
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
@@ -187,7 +216,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild className="border-t mt-1 text-muted-foreground">
-                            <Link href="/guardian/home" className="w-full flex items-center p-2 cursor-pointer">
+                            <Link href="/parent/home" className="w-full flex items-center p-2 cursor-pointer">
                                 <Users className="h-4 w-4 mr-2" /> 保護者画面へ
                             </Link>
                         </DropdownMenuItem>

@@ -4,57 +4,132 @@ service cloud.firestore {
     
     // --- Helper Functions ---
     
-    // Check if user is in 'admins' collection (ID must be their email)
+    // Check if user is admin or staff
+    // Checks existence of staff_user document. Matches sanitized email ID.
+    function isStaff() {
+      return request.auth != null && exists(/databases/$(database)/documents/staff_users/$(request.auth.token.email.replace('[.]', '_').replace('#', '_').replace('[$]', '_').replace('\\[', '_').replace('\\]', '_')));
+    }
+
+    // Check if user is admin (role == "admin" in staff_users doc)
     function isAdmin() {
-      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+      let staffDoc = get(/databases/$(database)/documents/staff_users/$(request.auth.token.email.replace('[.]', '_').replace('#', '_').replace('[$]', '_').replace('\\[', '_').replace('\\]', '_')));
+      return request.auth != null && staffDoc.data.role == "admin";
     }
     
-    // Check if user is authorized for a specific child (Read from Child doc)
+    // Check if user is authorized parent (Ver 7.1)
+    // GAS script syncs Emails into `parentIds`.
     function isParentOf(childId) {
       let child = get(/databases/$(database)/documents/children/$(childId));
-      return request.auth != null && (request.auth.token.email in child.data.authorizedEmails);
+      return request.auth != null && (
+        (child.data.parentIds != null && request.auth.token.email in child.data.parentIds) ||
+        (child.data.authorizedEmails != null && request.auth.token.email in child.data.authorizedEmails)
+      );
     }
 
     // --- Rules ---
 
-    // Admin Whitelist
-    // collection: admins (documentId = email address)
-    match /admins/{email} {
+    // Parents Collection (Ver 7.1)
+    match /parents/{parentId} {
+      // Parents can read and update their own record
+      allow read, update: if request.auth != null && request.auth.token.email == resource.data.email;
+      // Staff can read all parents
+      allow read: if isStaff();
+      // Only admin can create/update/delete parents
+      allow write: if isAdmin();
+    }
+
+    // Staff Users — Admin only for writes
+    match /staff_users/{userId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin(); // Admins can add other admins
+      allow write: if isAdmin();
+    }
+
+    // System Settings
+    match /system_settings/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // Children Master
     match /children/{childId} {
-      // Admin: Full Access
+      // Staff: Full Access
       // Parent: Read Only (Own child)
-      allow read: if isAdmin() || (request.auth != null && request.auth.token.email in resource.data.authorizedEmails);
-      allow write: if isAdmin();
+      allow read: if isStaff() || isParentOf(childId);
+      allow write: if isStaff();
     }
 
     // Attendance Records
     match /attendance/{docId} {
-      // Admin: Full Access
+      // Staff: Full Access
       // Parent: Read Own Child's Record
-      allow read: if isAdmin() || isParentOf(resource.data.childId);
+      allow read: if isStaff() || isParentOf(resource.data.childId);
       
-      // Parent: Can Update specific fields (Request changes)
-      // Note: Allowing 'create' might be needed if the record doesn't exist yet? 
-      // Usually records are created by Staff/System. Parents just update.
-      allow update: if isAdmin() || (
+      // Parent: Can Update specific fields (messages, returnMethod, memo)
+      allow update: if isStaff() || (
         isParentOf(resource.data.childId) && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['changeRequest', 'returnMethod', 'memo', 'returnDetails'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messages', 'returnMethod', 'memo', 'status'])
       );
       
-      allow create, delete: if isAdmin();
+      allow create, delete: if isStaff();
     }
 
-    // Documents (PDFs etc)
+    // Reservations
+    match /reservations/{docId} {
+      allow read: if isStaff() || (request.auth != null && isParentOf(resource.data.childId));
+      allow create: if request.auth != null && isParentOf(request.resource.data.childId);
+      allow update, delete: if isStaff() || (request.auth != null && isParentOf(resource.data.childId));
+    }
+
+    // Notifications
+    match /notifications/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isStaff();
+    }
+
+    // Documents (PDFs etc) — Admin only for writes
     match /documents/{docId} {
-      allow read: if request.auth != null; // Any logged-in user (Parent/Admin)
+      allow read: if request.auth != null; // Any logged-in user (Parent/Staff)
       allow write: if isAdmin();
     }
+
+    // Staff Daily Records
+    match /staff_daily/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    // Users (for profile management)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isStaff();
+    }
     
+    // Payments — Admin only for writes, staff read-only
+    match /payments/{paymentId} {
+      // Admin: Full Access
+      allow read: if isStaff();
+      allow write: if isAdmin();
+      // Parent: Create (their own child), Read (their own child)
+      allow create: if request.auth != null && isParentOf(request.resource.data.childId);
+      allow read: if request.auth != null && isParentOf(resource.data.childId);
+    }
+
+    // Staff Master
+    match /staff/{staffId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    // Staff Memos
+    match /staff_memos/{date} {
+      allow read, write: if isStaff();
+    }
+
+    // Applications
+    // Removed as per user request (Admission Application feature discontinued)
+    match /applications/{appId} {
+      allow read, write: if false;
+    }
+
     // Default: Deny
     match /{document=**} {
       allow read, write: if false;

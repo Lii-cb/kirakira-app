@@ -15,9 +15,14 @@ import {
     limit,
     getDoc,
     runTransaction,
-    documentId
+    documentId,
+    Timestamp,
+    FieldValue
 } from "firebase/firestore";
-import { AttendanceRecord, Child, Reservation, Application, SystemSettings, StaffUser } from "@/types/firestore";
+import { AttendanceRecord, Child, Reservation, SystemSettings, StaffUser } from "@/types/firestore";
+import { StaffNotification } from "@/types/firestore";
+import { Payment } from "@/types/firestore";
+import { AppDocument } from "@/types/firestore";
 
 export const getSystemSettings = async (): Promise<SystemSettings> => {
     const docRef = doc(db, "system_settings", "current");
@@ -28,8 +33,8 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
     // Fallback defaults
     return {
         id: "current",
-        fees: { basePrice: 3000, snackPrice: 100, extendedPrice: 100 },
-        notifications: { emailEnabled: true, lineEnabled: false },
+        fees: { basePrice: 0, snackPrice: 100 },
+        notifications: { emailEnabled: true },
         features: { newReservationsEnabled: true }
     };
 };
@@ -51,11 +56,9 @@ export const seedChildren = async (count: number = 50) => {
     // Check if children already exist
     const existing = await getChildren();
     if (existing.length > 5) {
-        console.log("Already seeded");
         return;
     }
 
-    const classes = ["1-1", "1-2", "2-1", "3-1", "4-1", "5-1", "6-1"];
     const returnMethods = ["お迎え", "集団下校", "一人帰り", "バス"];
 
     for (let i = 0; i < count; i++) {
@@ -64,13 +67,12 @@ export const seedChildren = async (count: number = 50) => {
             id,
             name: `児童 ${i + 1}郎`,
             kana: `じどう ${i + 1}ろう`,
-            className: classes[Math.floor(Math.random() * classes.length)],
             grade: Math.floor(Math.random() * 6) + 1,
             defaultReturnMethod: returnMethods[Math.floor(Math.random() * returnMethods.length)],
+            parentIds: [] // Initialize with empty array
         };
         await setDoc(doc(db, "children", id), newChild);
     }
-    console.log("Seeding complete");
 };
 
 // --- Attendance ---
@@ -139,7 +141,7 @@ export const ensureAttendanceRecords = async (date: string, children: Child[]) =
                 date,
                 childId: child.id,
                 childName: child.name,
-                className: child.className,
+                className: `${child.grade}年`,
                 // If they have a reservation, they are "scheduled", otherwise they might be just "registered" (but we treat all as pending for now)
                 status: "pending",
                 reservationTime: initialTime,
@@ -154,24 +156,12 @@ export const ensureAttendanceRecords = async (date: string, children: Child[]) =
     await Promise.all(batchPromises);
 };
 
-
-// --- Applications ---
-
-export const getApplications = async (): Promise<Application[]> => {
-    const q = query(collection(db, "applications"), orderBy("submissionDate", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Application));
+export const updateChild = async (id: string, data: Partial<Child>) => {
+    await updateDoc(doc(db, "children", id), data);
 };
 
-export const submitApplication = async (data: Omit<Application, "id" | "status" | "submissionDate">) => {
-    await addDoc(collection(db, "applications"), {
-        ...data,
-        status: "new",
-        submissionDate: serverTimestamp()
-    });
-};
-
-export const addChild = async (childData: Child) => {
+// --- Reservations ---
+export const addChild = async (childData: Partial<Child>) => {
     // Ensure ID
     if (!childData.id) {
         childData.id = `child-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -180,27 +170,7 @@ export const addChild = async (childData: Child) => {
     return childData.id;
 };
 
-export const processApplication = async (app: Application) => {
-    // 1. Create Child Document
-    const newChild: Child = {
-        id: `child-${Date.now()}`,
-        name: `${app.childLastName} ${app.childFirstName}`,
-        kana: `${app.childLastNameKana} ${app.childFirstNameKana}`,
-        className: "", // To be assigned later
-        grade: parseInt(app.grade, 10),
-        defaultReturnMethod: "お迎え" // Default
-    };
-    await addChild(newChild);
 
-    // 2. Update Application Status
-    await updateDoc(doc(db, "applications", app.id), {
-        status: "processed"
-    });
-};
-
-// --- Reservations ---
-
-// --- Reservations ---
 
 export const submitReservations = async (childId: string, dates: Date[], time: string, options?: { fee: number, hasSnack: boolean }) => {
     const promises = dates.map(date => {
@@ -244,7 +214,6 @@ export const updateReservation = async (id: string, data: Partial<Reservation>) 
 
 // --- Staff Notifications ---
 
-import { StaffNotification } from "@/types/firestore";
 
 export const sendPickupNotification = async (childId: string, childName: string, senderId: string = "Reception") => {
     await addDoc(collection(db, "notifications"), {
@@ -288,7 +257,7 @@ export interface Staff {
     id: string;
     name: string;
     isActive: boolean;
-    createdAt: any;
+    createdAt: Timestamp | FieldValue;
 }
 
 export const getStaffList = async (): Promise<Staff[]> => {
@@ -358,10 +327,8 @@ export const getMonthlyStaffAttendance = async (year: number, month: number) => 
     return stats;
 };
 
-
 // --- Staff Attendance ---
 
-// --- Staff Attendance ---
 
 export type StaffStatus = 'work' | 'temp_out' | 'left' | 'absent' | 'planned';
 
@@ -456,10 +423,8 @@ export const registerStaffShifts = async (name: string, dates: Date[], shiftTime
     await Promise.all(promises);
 };
 
-
 // --- Payments ---
 
-import { Payment } from "@/types/firestore";
 
 export const addPaymentRequest = async (childId: string, amount: number) => {
     const today = new Date().toISOString().split('T')[0];
@@ -489,13 +454,8 @@ export const confirmPayment = async (id: string) => {
         status: "confirmed"
     });
 };
-
-export const updateChild = async (id: string, data: Partial<Child>) => {
-    await updateDoc(doc(db, "children", id), data);
-};
-
 // --- Documents ---
-import { AppDocument } from "@/types/firestore";
+
 
 export const getDocuments = async (): Promise<AppDocument[]> => {
     const q = query(collection(db, "documents"), orderBy("createdAt", "desc"));

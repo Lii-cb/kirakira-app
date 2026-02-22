@@ -1,28 +1,101 @@
-# Ver1.1.0 Release Notes
+# Release Notes
 
-## 概要
-本番環境向けの堅牢性強化と、データ整合性の確保を目的としたメジャーアップデートです。
-「予約」から「当日の入退室管理」までの一貫したデータフローを確立しました。
+## Ver 7.1 (2026-02-10)
 
-## 主な変更点
+### 主な変更
 
-### 1. データフローの統合
-- **予約連携**: 当日の初期化処理において、確定済みの予約データを自動的に引き継ぐよう修正。
-  - 変更前: 一律でデフォルト時間（14:00-17:00）が設定される。
-  - 変更後: 予約された時間（例: 14:00-18:00）が正確に反映される。
+#### 用語の統一
+- **Guardian → Parent への完全リネーム**
+  - すべてのコード、UI、ドキュメントで用語を統一
+  - より直感的で理解しやすい命名に変更
 
-### 2. 保護者機能のリアルタイム化
-- **ホーム画面**: クライアントサイドでのモックデータを全廃し、Firestoreのリアルタイムリスナー (`subscribeTodayAttendance`) を導入。
-  - 管理者画面での「入室/退室」操作が即座に保護者画面に反映されます。
-  - 保護者画面からの「欠席・お迎え変更」申請が管理者へ即通知されます。
+#### データベース変更
+- **新規コレクション**
+  - `parents` コレクション作成（旧 `guardians`）
+  - Email ベース認証に統一
 
-### 3. 管理機能の強化
-- **児童名簿ページ**: `admin/users` を実装し、登録児童一覧を確認可能にしました。
-- **コード品質**: `ts-ignore` などの不適切な型回避を排除し、厳密な型チェックとNull安全性を導入しました。
+- **フィールド名変更**
+  - `children.guardianIds` → `children.parentIds`
+  - `children.guardianName` → `children.parentName`
+  - `authorizedEmails` 廃止（`parentIds` に統合）
 
-### 4. コンポーネント
-- UIライブラリとして `RadioGroup` を追加（お迎え変更申請用）。
-- `@radix-ui/react-checkbox`, `@radix-ui/react-radio-group` を追加依存関係としてインストール。
+#### ルーティング変更
+- `/guardian/*` → `/parent/*`
+  - `/parent/login` - 保護者ログイン
+  - `/parent/home` - 保護者ホーム
+  - `/parent/reserve` - 予約管理
+  - `/parent/payment` - 支払い管理
+  - `/parent/documents` - ドキュメント
 
-## 既知の課題
-- ビルド環境において、一部の依存関係解決エラー (`module-not-found`) が発生する場合がありますが、開発環境 (`npm run dev`) での動作は確認済みです。
+#### Security Rules 更新
+- `parents` コレクションのアクセス制御追加
+- `staff_users` ベースの認証に変更
+- 後方互換性確保（`authorizedEmails` サポート継続）
+
+#### GAS スクリプト
+- Ver 7.1 デプロイ
+- `Master_Guardians` → `Master_Parents` シート名変更
+- `GuardianIDs` → `ParentIDs` 列名変更
+
+### 破壊的変更
+
+⚠️ 以下の変更により、既存のコードやデータに影響があります：
+
+1. **ルート変更**
+   - 旧: `/guardian/*`
+   - 新: `/parent/*`
+   - ブックマークや直リンクの更新が必要
+
+2. **コレクション名**
+   - 旧: `guardians`
+   - 新: `parents`
+   - データマイグレーション実施済み
+
+3. **フィールド名**
+   - 旧: `guardianIds`, `guardianName`
+   - 新: `parentIds`, `parentName`
+   - データマイグレーション実施済み
+
+### マイグレーション
+
+データマイグレーションは自動実行済みです。
+
+- `guardians` → `parents` コレクション作成
+- `children` レコードのフィールド名更新
+- `attendance` メッセージの送信者フィールド更新
+
+### 既知の問題
+
+1. **Turbopack ビルドエラー**
+   - `npm run build` が失敗する場合があります
+   - 回避策: `firebase deploy --only hosting` を使用
+   - 開発サーバー（`npm run dev`）は正常動作
+
+### アップグレード手順
+
+Ver 6.3 から Ver 7.1 へのアップグレード：
+
+1. コードを最新版に更新
+2. `firebase deploy --only firestore:rules` で Security Rules デプロイ
+3. `firebase deploy --only hosting` でフロントエンドデプロイ
+4. スプレッドシートのシート名・列名を手動更新
+5. GAS スクリプト Ver 7.1 をデプロイ
+
+---
+
+## Ver 6.3 (2026-01)
+
+### 主な変更
+- GAS 統合、データ同期機能
+- 管理画面の改善
+- CSV インポート/エクスポート機能
+
+---
+
+## Ver 6.1
+
+### 主な変更
+- 基本機能の実装
+- 認証システム
+- 出席管理
+- 予約システム

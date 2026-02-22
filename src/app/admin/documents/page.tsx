@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, FileText, ExternalLink, Paperclip, Upload, Loader2 } from "lucide-react";
+import { Trash2, FileText, ExternalLink, Paperclip, Upload } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { addDocument, getDocuments, deleteDocument } from "@/lib/firestore";
 import { AppDocument } from "@/types/firestore";
 
@@ -147,7 +148,7 @@ export default function AdminDocumentsPage() {
 
                             <div className="space-y-2">
                                 <Label>カテゴリ</Label>
-                                <Select value={category} onValueChange={(v: any) => setCategory(v)}>
+                                <Select value={category} onValueChange={(v) => setCategory(v as "news" | "event" | "other")}>
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -188,7 +189,7 @@ export default function AdminDocumentsPage() {
                             </Tabs>
 
                             <Button type="submit" className="w-full" disabled={uploading}>
-                                {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {uploading && <Spinner className="mr-2 h-4 w-4" />}
                                 {uploading ? "登録中..." : "登録する"}
                             </Button>
                         </form>
@@ -202,7 +203,7 @@ export default function AdminDocumentsPage() {
                     </CardHeader>
                     <CardContent>
                         {loading ? (
-                            <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>
+                            <div className="flex justify-center p-10"><Spinner /></div>
                         ) : documents.length === 0 ? (
                             <div className="text-center p-10 text-muted-foreground">資料はまだありません</div>
                         ) : (

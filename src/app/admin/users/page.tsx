@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { getChildren, addChild, updateChild } from "@/lib/firestore";
 import { Child } from "@/types/firestore";
-import { Loader2, Download, Upload, FileUp, Cookie } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { Download, Upload, Cookie } from "lucide-react";
 
 export default function AdminUsersPage() {
     const [children, setChildren] = useState<Child[]>([]);
@@ -56,9 +57,9 @@ export default function AdminUsersPage() {
     // CSV Export
     const handleExport = () => {
         // Updated Header: Added Guardian Name and Phones
-        const header = "ID,学年,クラス,氏名,かな,帰宅方法,許可メール(セミコロン区分),保護者氏名,電話番号(セミコロン区分),おやつ免除(1=免除)\n";
+        const header = "ID,学年,氏名,かな,帰宅方法,許可メール(セミコロン区分),電話番号(セミコロン区分),おやつ免除(1=免除)\n";
         const rows = children.map(c =>
-            `${c.id},${c.grade},${c.className || ""},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(";")}",${c.guardianName || ""},"${(c.phoneNumbers || []).join(";")}",${c.snackConfig?.isExempt ? "1" : "0"}`
+            `${c.id},${c.grade},${c.name},${c.kana},${c.defaultReturnMethod},"${(c.authorizedEmails || []).join(";")}","${(c.phoneNumbers || []).join(";")}",${c.snackConfig?.isExempt ? "1" : "0"}`
         ).join("\n");
 
         const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), header + rows], { type: "text/csv;charset=utf-8;" });
@@ -101,18 +102,18 @@ export default function AdminUsersPage() {
                 const cleanLine = line.replace(/"/g, "");
                 const cols = cleanLine.split(",");
 
-                // Format: ID, Grade, Class, Name, Kana, Method, Emails, GuardianName, Phones, Snack
-                let id = "", grade = "1", className = "", name = "", kana = "", method = "お迎え", emailStr = "", guardianName = "", phoneStr = "", snackExempt = "0";
+                // Format: ID, Grade, Name, Kana, Method, Emails, Phones, Snack
+                let id = "", grade = "1", name = "", kana = "", method = "お迎え", emailStr = "", phoneStr = "", snackExempt = "0";
 
                 if (cols.length >= 8) {
-                    // Full Format
-                    [id, grade, className, name, kana, method, emailStr, guardianName, phoneStr, snackExempt] = cols;
+                    // New Format: ID, Grade, Name, Kana, Method, Emails, Phones, Snack
+                    [id, grade, name, kana, method, emailStr, phoneStr, snackExempt] = cols;
                 } else if (cols.length >= 6) {
-                    // Legacy Format
-                    [id, grade, className, name, kana, method, emailStr, snackExempt] = cols;
+                    // Minimal Format
+                    [id, grade, name, kana, method, emailStr, snackExempt] = cols;
                 } else {
                     // Fallback
-                    [grade, className, name, kana, method] = cols;
+                    [grade, name, kana, method] = cols;
                 }
 
                 if (!name) continue;
@@ -126,14 +127,12 @@ export default function AdminUsersPage() {
                     : [];
 
                 // Clean data
-                const childData: any = {
+                const childData: Partial<Child> = {
                     grade: parseInt(grade) || 1,
-                    className: className?.trim() || "",
                     name: name?.trim() || "",
                     kana: kana?.trim() || "",
-                    defaultReturnMethod: (method?.trim() as any) || "お迎え",
+                    defaultReturnMethod: (method?.trim() as Child['defaultReturnMethod']) || "お迎え",
                     authorizedEmails: authorizedEmails,
-                    guardianName: guardianName?.trim() || "",
                     phoneNumbers: phoneNumbers,
                     snackConfig: {
                         isExempt: snackExempt?.trim() === "1"
@@ -165,7 +164,7 @@ export default function AdminUsersPage() {
         <div className="space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">児童・利用者名簿</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">児童名簿</h2>
                     <p className="text-muted-foreground">CSVによる一括管理と個別の設定変更が可能です。</p>
                 </div>
                 <div className="flex gap-2">
@@ -192,20 +191,20 @@ export default function AdminUsersPage() {
                     <CardTitle>登録児童一覧</CardTitle>
                     <CardDescription>
                         現在登録されている児童の名簿です。<br />
-                        CSV形式: ID, 学年, クラス, 氏名, かな, 帰宅方法, 許可メール, 保護者名, 電話番号, おやつ免除
+                        CSV形式: ID, 学年, 氏名, かな, 帰宅方法, 許可メール, 電話番号, おやつ免除
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
-                        <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>
+                        <div className="flex justify-center p-10"><Spinner /></div>
                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>ID</TableHead>
-                                    <TableHead>学年/クラス</TableHead>
+                                    <TableHead>学年</TableHead>
                                     <TableHead>氏名</TableHead>
-                                    <TableHead>保護者連絡先</TableHead>
+                                    <TableHead>連絡先</TableHead>
                                     <TableHead>許可メール</TableHead>
                                     <TableHead>通常帰宅方法</TableHead>
                                     <TableHead>おやつ設定</TableHead>
@@ -215,14 +214,13 @@ export default function AdminUsersPage() {
                                 {children.map((child) => (
                                     <TableRow key={child.id}>
                                         <TableCell className="text-xs text-muted-foreground">{child.id}</TableCell>
-                                        <TableCell>{child.grade}年 {child.className}</TableCell>
+                                        <TableCell>{child.grade}年</TableCell>
                                         <TableCell className="font-medium">
                                             {child.name}<br />
                                             <span className="text-xs text-muted-foreground">{child.kana}</span>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col text-sm">
-                                                <span className="font-bold">{child.guardianName || "-"}</span>
                                                 {(child.phoneNumbers || []).map((phone, idx) => (
                                                     <a key={idx} href={`tel:${phone}`} className="text-blue-600 hover:underline flex items-center">
                                                         📞 {phone}

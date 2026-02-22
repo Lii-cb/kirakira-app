@@ -95,7 +95,7 @@ function AttendanceRowComponent({
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-2">
                                     <div className="flex flex-col gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground">保護者: {master?.guardianName || "未登録"}</span>
+                                        <span className="text-xs font-bold text-muted-foreground">連絡先</span>
                                         {phones.map((p, i) => (
                                             <a key={i} href={`tel:${p}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline bg-blue-50 p-2 rounded">
                                                 <Phone className="h-3 w-3" /> {p}

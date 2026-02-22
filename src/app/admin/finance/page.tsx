@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, CheckCircle, Ban } from "lucide-react";
+import { CheckCircle, Ban } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { getAllPayments, confirmPayment, getChildren } from "@/lib/firestore";
 import { Payment, Child } from "@/types/firestore";
 
@@ -42,7 +43,7 @@ export default function AdminFinancePage() {
     };
 
     const handleConfirm = async (id: string) => {
-        if (!confirm("入金を受領済みにしますか？\n（プール金残高に反映されます）")) return;
+        if (!confirm("入金を受領済みにしますか？\n（利用料残高に反映されます）")) return;
 
         setProcessingId(id);
         try {
@@ -60,7 +61,7 @@ export default function AdminFinancePage() {
     const pendingPayments = payments.filter(p => p.status === "pending");
     const historyPayments = payments.filter(p => p.status !== "pending");
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading) return <div className="flex justify-center p-10"><Spinner /></div>;
 
     return (
         <div className="space-y-6">
@@ -103,7 +104,7 @@ export default function AdminFinancePage() {
                                                 onClick={() => handleConfirm(p.id)}
                                                 disabled={processingId === p.id}
                                             >
-                                                {processingId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-1" /> 確認</>}
+                                                {processingId === p.id ? <Spinner className="w-4 h-4" /> : <><CheckCircle className="w-4 h-4 mr-1" /> 確認</>}
                                             </Button>
                                         </TableCell>
                                     </TableRow>

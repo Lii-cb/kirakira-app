@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, UserPlus, Loader2, ExternalLink } from "lucide-react";
+import { Trash2, UserPlus, ExternalLink } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { getSyncedStaffList, getMonthlyStaffAttendance } from "@/lib/firestore";
 import { StaffUser } from "@/types/firestore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -63,7 +64,7 @@ export default function StaffManagementPage() {
                 </CardHeader>
                 <CardContent>
                     {loading ? (
-                        <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>
+                        <div className="flex justify-center p-10"><Spinner /></div>
                     ) : (
                         <Table>
                             <TableHeader>

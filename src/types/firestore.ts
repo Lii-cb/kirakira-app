@@ -1,6 +1,6 @@
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, FieldValue } from "firebase/firestore";
 
-export type Role = "admin" | "staff" | "guardian";
+export type Role = "admin" | "staff" | "parent";
 
 
 export interface UserProfile {
@@ -8,7 +8,7 @@ export interface UserProfile {
     email: string | null;
     fullName: string | null;
     role: Role;
-    guardianId?: string; // Link to guardian profile if needed
+    parentId?: string; // Link to parent profile if needed
     createdAt: Timestamp;
 }
 
@@ -18,14 +18,14 @@ export interface StaffUser {
     name: string;
     role: "admin" | "staff";
     isActive: boolean;
-    createdAt?: any;
-    updatedAt?: any;
+    createdAt?: Timestamp | FieldValue;
+    updatedAt?: Timestamp | FieldValue;
 }
 
 export interface StaffMemo {
     id: string; // "YYYY-MM-DD"
     content: string;
-    updatedAt: any;
+    updatedAt: Timestamp | FieldValue;
     updatedBy: string; // Staff Name
 }
 
@@ -34,28 +34,24 @@ export interface SystemSettings {
     fees: {
         basePrice: number;
         snackPrice: number;
-        extendedPrice: number;
     };
     notifications?: {
         emailEnabled: boolean;
-        lineEnabled: boolean;
     };
     features?: {
         newReservationsEnabled: boolean;
     };
-    updatedAt?: any;
+    adminPin?: string; // PIN for admin mode switch (synced from Spreadsheet)
+    updatedAt?: Timestamp | FieldValue;
 }
 
 export interface Child {
     id: string; // Document ID
     name: string;
     kana: string;
-    className: string; // e.g. "1-1"
     grade: number; // 1-6
-    address?: string; // New: Address for records
-    guardianName?: string; // New: Primary Guardian Name
-    phoneNumbers?: string[]; // New: List of contact numbers (Max 2)
-    guardianId?: string; // ID of the primary guardian
+    phoneNumbers?: string[]; // List of contact numbers (Max 2)
+    parentIds?: string[]; // IDs of the parents (Optional: may not exist for legacy records)
     defaultReturnMethod?: string; // "お迎え" etc.
     snackConfig?: {
         isExempt: boolean; // おやつ不要フラグ
@@ -71,12 +67,12 @@ export interface AppDocument {
     base64?: string; // Small file storage (MVP)
     fileName?: string;
     eventDate?: string; // "YYYY-MM-DD" Use this for calendar events
-    createdAt: any;
+    createdAt: Timestamp | FieldValue;
 }
 
 export interface Message {
     id: string;
-    sender: "guardian" | "staff";
+    sender: "parent" | "staff";
     senderName: string; // "Mother" or "Staff"
     content: string;
     timestamp: string; // ISO String
@@ -118,23 +114,10 @@ export interface Reservation {
     status: "pending" | "confirmed" | "rejected";
     fee?: number;
     hasSnack?: boolean;
-    createdAt: any; // Timestamp or FieldValue
+    createdAt: Timestamp | FieldValue;
 }
 
-export interface Application {
-    id: string;
-    childLastName: string;
-    childFirstName: string;
-    childLastNameKana: string;
-    childFirstNameKana: string;
-    grade: string;
-    guardianLastName: string;
-    guardianFirstName: string;
-    phone: string;
-    email: string;
-    status: "new" | "processed";
-    submissionDate: any;
-}
+
 
 export interface StaffNotification {
     id: string;
@@ -154,5 +137,16 @@ export interface Payment {
     date: string; // "YYYY-MM-DD"
     status: "pending" | "confirmed" | "rejected";
     note?: string;
-    createdAt: any;
+    createdAt: Timestamp | FieldValue;
+}
+
+// --- Shared UI Types ---
+
+import { SiblingColorTheme } from "@/lib/constants";
+
+export interface ChildData {
+    id: string;
+    master: Child;
+    attendance?: AttendanceRecord | null;
+    colorTheme: SiblingColorTheme;
 }

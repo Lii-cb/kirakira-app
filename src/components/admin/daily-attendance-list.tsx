@@ -89,19 +89,6 @@ export function DailyAttendanceList() {
 
     // Initial Data Fetch & Subscription
     useEffect(() => {
-        // If Staff mode, always lock to Today
-        if (mode === 'staff') {
-            const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
-            const currentStr = currentDate.toISOString().split('T')[0];
-            if (todayStr !== currentStr) {
-                setCurrentDate(now);
-                return;
-            }
-        }
-    }, [mode]);
-
-    useEffect(() => {
         const dateStr = currentDate.toISOString().split('T')[0];
         const unsubscribe = subscribeTodayAttendance(dateStr, (data) => {
             setChildren(data);
@@ -289,8 +276,8 @@ export function DailyAttendanceList() {
             if (!aPending && bPending) return 1;
 
             const { key, direction } = sortConfig;
-            let valA: any = a[key] || "";
-            let valB: any = b[key] || "";
+            let valA: string | number = a[key] as string || "";
+            let valB: string | number = b[key] as string || "";
 
             if (key === 'status') {
                 const statusOrder: Record<string, number> = { "arrived": 1, "pending": 2, "left": 3, "absent": 4 };
@@ -327,7 +314,7 @@ export function DailyAttendanceList() {
                                         "justify-start text-left font-normal",
                                         !isToday && "text-primary border-primary bg-primary/5"
                                     )}
-                                    disabled={mode === 'staff'}
+                                    disabled={false}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {dateDisplay}
