@@ -41,6 +41,7 @@ function onOpen() {
             .addItem('職員データを同期', 'syncStaffOnly'))
         .addSubMenu(SpreadsheetApp.getUi().createMenu('📥 インポート')
             .addItem('新規メンバーをインポート', 'importNewMembers'))
+        .addItem('🔄 Membersシートから児童データを復元', 'restoreFromMembers')
         .addItem('ℹ️ バージョン情報', 'showVersion')
         .addToUi();
 }
@@ -124,13 +125,14 @@ function syncParents(ss) {
 }
 
 function syncMembers(ss) {
-    let sheet = ensureSheet(ss, SHEETS.MEMBERS, [["ID", "学年", "クラス", "氏名", "フリガナ", "ParentIDs", "アレルギー", "備考"]]);
+    let sheet = ensureSheet(ss, SHEETS.MEMBERS, [["ID", "学年", "氏名", "フリガナ", "ParentIDs", "電話番号", "備考"]]);
     const allDocs = firestore.getDocuments("children");
     const rows = (allDocs || []).map(doc => {
         const f = doc.fields;
-        return [getValue(f.id), getValue(f.grade), getValue(f.className), getValue(f.name), getValue(f.kana),
+        return [getValue(f.id), getValue(f.grade), getValue(f.name), getValue(f.kana),
         Array.isArray(getValue(f.parentIds)) ? getValue(f.parentIds).join(",") : "",
-        getValue(f.allergies), getValue(f.notes)];
+        Array.isArray(getValue(f.phoneNumbers)) ? getValue(f.phoneNumbers).join(",") : "",
+        getValue(f.notes)];
     });
     writeSheetData(sheet, rows);
 }
@@ -181,4 +183,71 @@ function importNewMembers() {
             sheet.getRange(i + 1, idx.status + 1).setValue("完了");
         } catch (e) { }
     }
+}
+
+/**
+ * 🔄 Membersシートから児童データをFirestoreに復元する
+ * Membersシートのフォーマット: ID, 学年, 氏名, フリガナ, ParentIDs, 電話番号, 備考
+ */
+function restoreFromMembers() {
+    const ui = SpreadsheetApp.getUi();
+    const result = ui.alert(
+        '児童データの復元',
+        'Membersシートのデータを使ってFirestoreのchildrenコレクションを復元します。\n続行しますか？',
+        ui.ButtonSet.YES_NO
+    );
+    if (result !== ui.Button.YES) return;
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEETS.MEMBERS);
+    if (!sheet) {
+        ui.alert('エラー', 'Membersシートが見つかりません。', ui.ButtonSet.OK);
+        return;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    // ヘッダー行（1行目）をスキップ
+    // フォーマット: [0]ID, [1]学年, [2]氏名, [3]フリガナ, [4]ParentIDs, [5]電話番号, [6]備考
+    let restored = 0;
+    let skipped = 0;
+
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const id = String(row[0] || "").trim();
+        const name = String(row[2] || "").trim();
+
+        // IDも名前もない行はスキップ
+        if (!id && !name) {
+            skipped++;
+            continue;
+        }
+
+        const docId = id || ("child_" + Date.now() + "_" + i);
+        const gradeRaw = String(row[1]).replace(/[年生]/g, "").trim();
+
+        const childData = {
+            id: docId,
+            name: name,
+            kana: String(row[3] || "").trim(),
+            grade: Number(gradeRaw) || 1,
+            parentIds: String(row[4] || "").split(",").map(s => s.trim()).filter(s => s),
+            phoneNumbers: String(row[5] || "").split(",").map(s => s.trim()).filter(s => s),
+            defaultReturnMethod: "お迎え",
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            upsertDocument("children/" + docId, childData);
+            restored++;
+        } catch (e) {
+            Logger.log("Error restoring " + docId + ": " + e.message);
+            skipped++;
+        }
+    }
+
+    ui.alert(
+        '復元完了',
+        '復元: ' + restored + '件\nスキップ: ' + skipped + '件',
+        ui.ButtonSet.OK
+    );
 }
