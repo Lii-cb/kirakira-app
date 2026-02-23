@@ -66,6 +66,7 @@ function ParentHomeContent() {
 
             try {
                 let targetChildIds: string[] = [];
+                let adminMode = false;
 
                 // Admin viewing a specific child via ?childId=xxx
                 if (targetChildIdParam) {
@@ -76,13 +77,18 @@ function ParentHomeContent() {
                         const childDoc = await getDoc(doc(db, "children", targetChildIdParam));
                         if (childDoc.exists()) {
                             targetChildIds = [targetChildIdParam];
+                            adminMode = true;
                             setIsAdminViewing(true);
+                        } else {
+                            alert("指定された児童が見つかりません。");
+                            setLoading(false);
+                            return;
                         }
                     }
                 }
 
-                // Normal parent flow (if not admin-viewing)
-                if (targetChildIds.length === 0 && !isAdminViewing) {
+                // Normal parent flow (only if not admin-viewing)
+                if (!adminMode) {
                     const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
                     const parentSnapshot = await getDocs(parentQuery);
 
@@ -117,9 +123,6 @@ function ParentHomeContent() {
 
                 // Fetch Child Master Data
                 const childrenPromises = targetChildIds.map(async (id, index) => {
-                    // Start subscription for attendance
-                    // We'll fetch master data here
-                    const { doc, getDoc } = await import("firebase/firestore");
                     const d = await getDoc(doc(db, "children", id));
 
                     if (d.exists()) {
@@ -152,7 +155,7 @@ function ParentHomeContent() {
         });
 
         return () => unsubscribe();
-    }, [router]);
+    }, [router, targetChildIdParam]);
 
     // Subscribe to attendance for all children
     useEffect(() => {
