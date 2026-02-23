@@ -216,10 +216,15 @@ export default function AdminUsersPage() {
                                         <TableCell className="text-xs text-muted-foreground">{child.id}</TableCell>
                                         <TableCell>{child.grade}年</TableCell>
                                         <TableCell className="font-medium">
-                                            <a href={`/parent/home/?childId=${child.id}`} className="text-blue-600 hover:underline cursor-pointer">
-                                                {child.name}
-                                            </a><br />
+                                            <span>{child.name}</span><br />
                                             <span className="text-xs text-muted-foreground">{child.kana}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { window.location.href = `/parent/home/?childId=${child.id}`; }}
+                                                className="mt-1 block text-xs text-blue-600 underline cursor-pointer bg-transparent border-none p-0"
+                                            >
+                                                → マイページを開く
+                                            </button>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col text-sm">
