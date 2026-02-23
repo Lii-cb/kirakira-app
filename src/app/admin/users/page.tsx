@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -217,9 +216,9 @@ export default function AdminUsersPage() {
                                         <TableCell className="text-xs text-muted-foreground">{child.id}</TableCell>
                                         <TableCell>{child.grade}年</TableCell>
                                         <TableCell className="font-medium">
-                                            <Link href={`/parent/home/?childId=${child.id}`} className="text-blue-600 hover:underline cursor-pointer">
+                                            <a href={`/parent/home/?childId=${child.id}`} className="text-blue-600 hover:underline cursor-pointer">
                                                 {child.name}
-                                            </Link><br />
+                                            </a><br />
                                             <span className="text-xs text-muted-foreground">{child.kana}</span>
                                         </TableCell>
                                         <TableCell>

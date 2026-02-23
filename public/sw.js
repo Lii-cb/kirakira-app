@@ -1,5 +1,5 @@
 // Service Worker for きらきら児童クラブ PWA
-const CACHE_VERSION = 'kirakira-v2';
+const CACHE_VERSION = 'kirakira-v3';
 const STATIC_ASSETS = [
     '/',
     '/login/',
