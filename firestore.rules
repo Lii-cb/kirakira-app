@@ -76,7 +76,7 @@ service cloud.firestore {
     // Reservations
     match /reservations/{docId} {
       allow read: if isStaff() || (request.auth != null && isParentOf(resource.data.childId));
-      allow create: if request.auth != null && isParentOf(request.resource.data.childId);
+      allow create: if isStaff() || (request.auth != null && isParentOf(request.resource.data.childId));
       allow update, delete: if isStaff() || (request.auth != null && isParentOf(resource.data.childId));
     }
 
