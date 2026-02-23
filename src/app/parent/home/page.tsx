@@ -1,16 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, MessageCircle, AlertTriangle, Home as HomeIcon, Clock, Moon, Calendar as CalendarIcon, User } from "lucide-react";
+import { LogOut, MessageCircle, AlertTriangle, Home as HomeIcon, Clock, Moon, Calendar as CalendarIcon, User, ShieldCheck, ArrowLeft } from "lucide-react";
 import { subscribeTodayAttendance, updateAttendanceStatus, getDocuments } from "@/lib/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import Link from "next/link";
 import { AttendanceRecord, Child, AppDocument } from "@/types/firestore";
 import {
     Dialog,
@@ -31,11 +32,14 @@ import { SIBLING_COLORS } from "@/lib/constants";
 import { ChildData } from "@/types/firestore";
 
 
-export default function ParentHomePage() {
+function ParentHomeContent() {
     const [childrenData, setChildrenData] = useState<ChildData[]>([]);
     const [loading, setLoading] = useState(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [isAdminViewing, setIsAdminViewing] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const targetChildIdParam = searchParams.get("childId");
 
     // Event Calendar State
     const [date, setDate] = useState<Date | undefined>(new Date());
@@ -61,42 +65,48 @@ export default function ParentHomePage() {
             setUserEmail(user.email);
 
             try {
-                // Find all children by authorizedEmail via backward compatibility or parentIds
-                // Note: In Ver 7.1, we primarily check parents collection, but for home page rendering
-                // we need to find children linked to this user.
-
-                // 1. Try to find parent record first to get childIds (Best for Ver 7.1)
-                const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
-                const parentSnapshot = await getDocs(parentQuery);
-
                 let targetChildIds: string[] = [];
-                let parentNameFromRecord = "";
 
-                if (!parentSnapshot.empty) {
-                    const parentData = parentSnapshot.docs[0].data();
-                    targetChildIds = parentData.childIds || [];
-                    parentNameFromRecord = parentData.name;
-                } else {
-                    // Fallback: Query children directly by authorizedEmails (Backward compatibility)
-                    const q = query(
-                        collection(db, "children"),
-                        where("authorizedEmails", "array-contains", user.email)
-                    );
-                    const snapshot = await getDocs(q);
-                    targetChildIds = snapshot.docs.map(d => d.id);
+                // Admin viewing a specific child via ?childId=xxx
+                if (targetChildIdParam) {
+                    const staffQ = query(collection(db, "staff_users"), where("email", "==", user.email));
+                    const staffSnap = await getDocs(staffQ);
+                    if (!staffSnap.empty && staffSnap.docs[0].data().role === "admin") {
+                        // Verify the child exists
+                        const childDoc = await getDoc(doc(db, "children", targetChildIdParam));
+                        if (childDoc.exists()) {
+                            targetChildIds = [targetChildIdParam];
+                            setIsAdminViewing(true);
+                        }
+                    }
                 }
 
-                if (targetChildIds.length === 0) {
-                    // Try one more fallback: direct query to children even if parent record exists
-                    // (in case childIds in parent record is out of sync)
-                    const q = query(
-                        collection(db, "children"),
-                        where("authorizedEmails", "array-contains", user.email)
-                    );
-                    const snapshot = await getDocs(q);
-                    const directIds = snapshot.docs.map(d => d.id);
-                    // Merge unique IDs
-                    targetChildIds = Array.from(new Set([...targetChildIds, ...directIds]));
+                // Normal parent flow (if not admin-viewing)
+                if (targetChildIds.length === 0 && !isAdminViewing) {
+                    const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
+                    const parentSnapshot = await getDocs(parentQuery);
+
+                    if (!parentSnapshot.empty) {
+                        const parentData = parentSnapshot.docs[0].data();
+                        targetChildIds = parentData.childIds || [];
+                    } else {
+                        const q = query(
+                            collection(db, "children"),
+                            where("authorizedEmails", "array-contains", user.email)
+                        );
+                        const snapshot = await getDocs(q);
+                        targetChildIds = snapshot.docs.map(d => d.id);
+                    }
+
+                    if (targetChildIds.length === 0) {
+                        const q = query(
+                            collection(db, "children"),
+                            where("authorizedEmails", "array-contains", user.email)
+                        );
+                        const snapshot = await getDocs(q);
+                        const directIds = snapshot.docs.map(d => d.id);
+                        targetChildIds = Array.from(new Set([...targetChildIds, ...directIds]));
+                    }
                 }
 
                 if (targetChildIds.length === 0) {
@@ -285,6 +295,20 @@ export default function ParentHomePage() {
                     </Button>
                 </div>
             </header>
+
+            {/* Admin Viewing Banner */}
+            {isAdminViewing && (
+                <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>管理者として閲覧中</span>
+                    </div>
+                    <Link href="/admin/users" className="flex items-center gap-1 text-sm text-amber-700 hover:text-amber-900 font-medium">
+                        <ArrowLeft className="h-3 w-3" />
+                        児童名簿に戻る
+                    </Link>
+                </div>
+            )}
 
             <main className="p-4 max-w-md mx-auto space-y-8">
 
@@ -552,5 +576,17 @@ export default function ParentHomePage() {
 
             </main>
         </div>
+    );
+}
+
+export default function ParentHomePage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-gray-400">読み込み中...</div>
+            </div>
+        }>
+            <ParentHomeContent />
+        </Suspense>
     );
 }
