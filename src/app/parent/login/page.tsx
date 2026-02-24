@@ -21,7 +21,7 @@ export default function ParentLoginPage() {
         try {
             const provider = new GoogleAuthProvider();
             const result = await signInWithPopup(auth, provider);
-            // バージョン表示 | フッターに `Ver 2.2.1` 表示
+            // バージョン表示 | フッターに `Ver 2.2.2` 表示
             const user = result.user;
 
             if (!user.email) {

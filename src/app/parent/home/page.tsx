@@ -673,18 +673,7 @@ function ParentHomeContent() {
                 </div>
             </main>
 
-            {/* Float Bottom Navigation Mock (Integrated feels better) */}
-            <div className="fixed bottom-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-md border-t flex items-center justify-around px-4 md:hidden">
-                <Button variant="ghost" className="flex-col h-full rounded-none" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                    <HomeIcon className="h-5 w-5 text-blue-600" />
-                    <span className="text-[9px] mt-1 font-bold">ホーム</span>
-                </Button>
-                <div className="h-2 w-2 rounded-full bg-slate-200" />
-                <Button variant="ghost" className="flex-col h-full rounded-none opacity-50" onClick={() => router.push("/parent/reserve")}>
-                    <CalendarIcon className="h-5 w-5" />
-                    <span className="text-[9px] mt-1">追加予約</span>
-                </Button>
-            </div>
+
 
             {/* Standard Dialogs */}
             <Dialog open={isAbsenceOpen} onOpenChange={setIsAbsenceOpen}>
