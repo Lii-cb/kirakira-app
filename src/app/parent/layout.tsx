@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Home, CalendarDays, Wallet, FileText } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 
-export default function ParentLayout({
+function ParentLayoutInner({
     children,
 }: {
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const childId = searchParams.get("childId");
     const { user, role, loading } = useAuth();
 
     // Protect routes
@@ -37,11 +39,11 @@ export default function ParentLayout({
         }
     }, [user, role, loading, router, pathname]);
 
+    const childIdSuffix = childId ? `?childId=${childId}` : "";
     const navItems = [
-        { href: "/parent/home", label: "ホーム", icon: Home },
-        { href: "/parent/reserve", label: "予約", icon: CalendarDays },
-        { href: "/parent/payment", label: "利用料", icon: Wallet },
-        { href: "/parent/documents", label: "お便り", icon: FileText },
+        { href: `/parent/home${childIdSuffix}`, label: "ホーム", icon: Home },
+        { href: `/parent/payment${childIdSuffix}`, label: "利用料", icon: Wallet },
+        { href: `/parent/documents${childIdSuffix}`, label: "お便り", icon: FileText },
     ];
 
     // Don't show layout elements on login page
@@ -81,21 +83,24 @@ export default function ParentLayout({
 
             {/* Bottom Navigation (Mobile) */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-2 md:hidden z-20">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.href}
-                        href={item.href}
-                        className={cn(
-                            "flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg transition-colors",
-                            pathname.startsWith(item.href)
-                                ? "text-primary bg-primary/5"
-                                : "text-muted-foreground hover:bg-gray-100"
-                        )}
-                    >
-                        <item.icon className="h-5 w-5" />
-                        <span className="text-[10px] font-medium">{item.label}</span>
-                    </Link>
-                ))}
+                {navItems.map((item) => {
+                    const basePath = item.href.split("?")[0];
+                    return (
+                        <Link
+                            key={basePath}
+                            href={item.href}
+                            className={cn(
+                                "flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg transition-colors",
+                                pathname.startsWith(basePath)
+                                    ? "text-primary bg-primary/5"
+                                    : "text-muted-foreground hover:bg-gray-100"
+                            )}
+                        >
+                            <item.icon className="h-5 w-5" />
+                            <span className="text-[10px] font-medium">{item.label}</span>
+                        </Link>
+                    );
+                })}
             </nav>
 
             {/* Desktop Navigation (Simple Header Links for now, focus on Mobile) */}
@@ -103,5 +108,21 @@ export default function ParentLayout({
                 {/* Placeholder for Desktop Nav if needed */}
             </div>
         </div>
+    );
+}
+
+export default function ParentLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center">
+                <span className="animate-pulse text-blue-500 text-sm">Loading...</span>
+            </div>
+        }>
+            <ParentLayoutInner>{children}</ParentLayoutInner>
+        </Suspense>
     );
 }

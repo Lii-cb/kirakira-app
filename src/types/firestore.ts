@@ -18,25 +18,28 @@ export interface StaffUser {
     name: string;
     role: "admin" | "staff";
     isActive: boolean;
+    hourlyRate?: number; // Added for salary estimation
     createdAt?: Timestamp | FieldValue;
     updatedAt?: Timestamp | FieldValue;
 }
 
 export interface StaffMemo {
-    id: string; // "YYYY-MM-DD"
+    id: string; // YYYY-MM-DD
     content: string;
-    updatedAt: Timestamp | FieldValue;
-    updatedBy: string; // Staff Name
+    updatedBy: string;
+    updatedAt: Timestamp;
 }
 
 export interface SystemSettings {
-    id: "current"; // Singleton ID
+    id: string; // Changed from "current"
     fees: {
         basePrice: number;
         snackPrice: number;
     };
     notifications?: {
         emailEnabled: boolean;
+        chatEmail?: string; // Target email for Google Chat link
+        staffChatUrl?: string; // Direct link if available
     };
     features?: {
         newReservationsEnabled: boolean;
@@ -57,6 +60,16 @@ export interface Child {
         isExempt: boolean; // おやつ不要フラグ
     };
     authorizedEmails?: string[]; // List of allowed Google Emails
+}
+
+export interface StaffState {
+    id: string;
+    name: string;
+    status: "work" | "temp_out" | "left" | "absent" | "planned";
+    shiftTime?: string; // HH:mm
+    time: string; // HH:mm (Legacy field, usually set to check-in/check-out time)
+    actualTime?: string; // HH:mm (Start)
+    actualEndTime?: string; // HH:mm (End)
 }
 
 export interface AppDocument {

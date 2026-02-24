@@ -16,13 +16,17 @@ export type ChildData = {
 
 /**
  * Hook that resolves the current authenticated parent's children.
- * Checks parents collection first, falls back to authorizedEmails on children.
+ * Checks parents collection first, falls back to parentIds and authorizedEmails on children collection.
  * Redirects to /parent/login if not authenticated.
+ *
+ * @param targetChildId - Optional childId for admin-viewing mode.
+ *   When provided, verifies the user is admin and loads that specific child.
  */
-export function useParentChildren() {
+export function useParentChildren(targetChildId?: string | null) {
     const [childrenData, setChildrenData] = useState<ChildData[]>([]);
     const [loading, setLoading] = useState(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [isAdminViewing, setIsAdminViewing] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -34,34 +38,58 @@ export function useParentChildren() {
             setUserEmail(user.email);
 
             try {
-                // 1. Try parent record first (Ver 7.1+)
-                let targetChildIds: string[] = [];
-                const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
-                const parentSnapshot = await getDocs(parentQuery);
+                let targetChildIds = new Set<string>();
+                let adminMode = false;
 
-                if (!parentSnapshot.empty) {
-                    const parentData = parentSnapshot.docs[0].data();
-                    targetChildIds = parentData.childIds || [];
+                // 1. Admin viewing a specific child via targetChildId
+                if (targetChildId) {
+                    const sanitizedEmail = (user.email || "").replace(/[.#$[\]]/g, "_");
+                    const staffDoc = await getDoc(doc(db, "staff_users", sanitizedEmail));
+
+                    if (staffDoc.exists() && staffDoc.data().role === "admin") {
+                        const childDoc = await getDoc(doc(db, "children", targetChildId));
+                        if (childDoc.exists()) {
+                            targetChildIds.add(targetChildId);
+                            adminMode = true;
+                            setIsAdminViewing(true);
+                        }
+                    }
                 }
 
-                // 2. Fallback: query children by authorizedEmails
-                if (targetChildIds.length === 0) {
-                    const q = query(
-                        collection(db, "children"),
-                        where("authorizedEmails", "array-contains", user.email)
-                    );
-                    const snapshot = await getDocs(q);
-                    const directIds = snapshot.docs.map(d => d.id);
-                    targetChildIds = Array.from(new Set([...targetChildIds, ...directIds]));
+                // 2. Normal parent flow (only if not admin-viewing)
+                if (!adminMode) {
+                    // Start multiple lookup strategies in parallel
+                    const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
+                    const childByEmailsQuery = query(collection(db, "children"), where("authorizedEmails", "array-contains", user.email));
+                    const childByParentIdsQuery = query(collection(db, "children"), where("parentIds", "array-contains", user.email));
+
+                    const [parentSnap, emailsSnap, pIdsSnap] = await Promise.all([
+                        getDocs(parentQuery),
+                        getDocs(childByEmailsQuery),
+                        getDocs(childByParentIdsQuery)
+                    ]);
+
+                    // Strategy A: From parent record
+                    if (!parentSnap.empty) {
+                        (parentSnap.docs[0].data().childIds || []).forEach((id: string) => targetChildIds.add(id));
+                    }
+
+                    // Strategy B: From authorizedEmails array in children
+                    emailsSnap.docs.forEach(d => targetChildIds.add(d.id));
+
+                    // Strategy C: From parentIds array in children (GAS import standard)
+                    pIdsSnap.docs.forEach(d => targetChildIds.add(d.id));
                 }
 
-                if (targetChildIds.length === 0) {
+                const uniqueIds = Array.from(targetChildIds);
+                if (uniqueIds.length === 0) {
+                    setChildrenData([]);
                     setLoading(false);
                     return;
                 }
 
                 // 3. Fetch child master data
-                const childrenPromises = targetChildIds.map(async (id, index) => {
+                const childrenPromises = uniqueIds.map(async (id, index) => {
                     const d = await getDoc(doc(db, "children", id));
                     if (d.exists()) {
                         return {
@@ -86,7 +114,7 @@ export function useParentChildren() {
         });
 
         return () => unsubscribe();
-    }, [router]);
+    }, [router, targetChildId]);
 
-    return { childrenData, loading, userEmail };
+    return { childrenData, loading, userEmail, isAdminViewing };
 }

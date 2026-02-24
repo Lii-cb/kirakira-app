@@ -198,10 +198,32 @@ export const updateReservationStatus = async (id: string, status: "confirmed" | 
     await updateDoc(doc(db, "reservations", id), { status });
 };
 
+export const bulkUpdateReservationStatus = async (ids: string[], status: "confirmed" | "rejected") => {
+    const promises = ids.map(id => updateDoc(doc(db, "reservations", id), { status }));
+    await Promise.all(promises);
+};
+
+export const getPendingReservationsCount = (callback: (count: number) => void) => {
+    const q = query(collection(db, "reservations"), where("status", "==", "pending"));
+    return onSnapshot(q, (snapshot) => {
+        callback(snapshot.size);
+    });
+};
+
 export const getReservationsForChild = async (childId: string): Promise<Reservation[]> => {
     const q = query(collection(db, "reservations"), where("childId", "==", childId), orderBy("date", "desc"));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+};
+
+export const subscribeReservationsForChild = (childId: string, callback: (reservations: Reservation[]) => void) => {
+    const q = query(collection(db, "reservations"), where("childId", "==", childId));
+    return onSnapshot(q, (snapshot) => {
+        const reservations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+        // Sort in-memory to avoid index requirements
+        reservations.sort((a, b) => b.date.localeCompare(a.date));
+        callback(reservations);
+    });
 };
 
 export const cancelReservation = async (id: string) => {
@@ -492,4 +514,37 @@ export const updateStaffMemo = async (date: string, content: string, staffName: 
         updatedBy: staffName,
         updatedAt: serverTimestamp()
     }, { merge: true });
+
+    // Update global settings for "Last Update" timestamp
+    const settingsRef = doc(db, "system", "settings");
+    await setDoc(settingsRef, {
+        lastMemoUpdate: serverTimestamp()
+    }, { merge: true });
+};
+
+// --- Staff Attendance Queries ---
+
+export const subscribeStaffDaily = (date: string, callback: (list: StaffState[]) => void) => {
+    const docRef = doc(db, "staff_daily", date);
+    return onSnapshot(docRef, (snap) => {
+        if (snap.exists()) {
+            callback(snap.data().list || []);
+        } else {
+            callback([]);
+        }
+    });
+};
+
+export const getStaffDailyRecordsForMonth = async (yearMonth: string): Promise<{ date: string, list: StaffState[] }[]> => {
+    // yearMonth: "YYYY-MM"
+    const q = query(
+        collection(db, "staff_daily"),
+        where(documentId(), ">=", `${yearMonth}-01`),
+        where(documentId(), "<=", `${yearMonth}-31`)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+        date: doc.id,
+        list: doc.data().list || []
+    }));
 };

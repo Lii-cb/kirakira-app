@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,8 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Search, ArrowUpDown, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AttendanceRecord, Child, Message } from "@/types/firestore";
-import { subscribeTodayAttendance, updateAttendanceStatus, getChildren } from "@/lib/firestore";
+import { AttendanceRecord, Child, Message, StaffState } from "@/types/firestore";
+import { subscribeTodayAttendance, updateAttendanceStatus, getChildren, subscribeStaffAttendance } from "@/lib/firestore";
 import { useStaffNotifications } from "@/contexts/staff-notification-context";
 import { StaffAttendanceList } from "@/components/admin/staff-attendance-list";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -60,12 +61,22 @@ const getRoundedArrivalTime = getRoundedTime;
 const getRoundedDepartureTime = getRoundedTime;
 
 export function DailyAttendanceList() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const dateParam = searchParams.get("date");
+
     const [children, setChildren] = useState<AttendanceRecord[]>([]);
     const [masterChildren, setMasterChildren] = useState<Record<string, Child>>({}); // Master Data Map
     const [selectedChild, setSelectedChild] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [currentDate, setCurrentDate] = useState<Date>(new Date());
+    const [currentDate, setCurrentDate] = useState<Date>(() => {
+        if (dateParam) {
+            const d = new Date(dateParam);
+            if (!isNaN(d.getTime())) return d;
+        }
+        return new Date();
+    });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
     // Chat State
@@ -247,16 +258,30 @@ export function DailyAttendanceList() {
     const isToday = currentDate.toDateString() === new Date().toDateString();
 
     // Metrics
+    const [staffAttendance, setStaffAttendance] = useState<StaffState[]>([]);
+
+    // ... useEffect ...
+    useEffect(() => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const unsubscribeStaff = subscribeStaffAttendance(dateStr, (data) => {
+            setStaffAttendance(data);
+        });
+        return () => unsubscribeStaff();
+    }, [currentDate]);
+
+    // Metrics
     const metrics = useMemo(() => {
-        const totalEnrolled = 50;
-        const totalRegistered = children.length;
+        const masterCount = Object.keys(masterChildren).length;
+        const totalEnrolled = masterCount || 50; // Fallback to 50 for aesthetic
+        const totalRegistered = masterCount || 0;
         const scheduled = children.length;
         const present = children.filter(c => c.status === "arrived").length;
         const left = children.filter(c => c.status === "left").length;
         const absent = children.filter(c => c.status === "absent").length;
+        const staffOnDuty = staffAttendance.filter(s => s.status === "work" || s.status === "temp_out").length;
 
-        return { totalEnrolled, totalRegistered, scheduled, present, left, absent };
-    }, [children]);
+        return { totalEnrolled, totalRegistered, scheduled, present, left, absent, staffOnDuty };
+    }, [children, masterChildren, staffAttendance]);
 
     const handleSortCol = (key: keyof AttendanceRecord) => {
         let direction: 'asc' | 'desc' = 'asc';
@@ -326,6 +351,8 @@ export function DailyAttendanceList() {
                                     selected={currentDate}
                                     onSelect={(date) => {
                                         if (date) {
+                                            const dateStr = date.toISOString().split('T')[0];
+                                            router.push(`?date=${dateStr}`, { scroll: false });
                                             setCurrentDate(date);
                                             setIsCalendarOpen(false);
                                         }
@@ -336,15 +363,18 @@ export function DailyAttendanceList() {
                         </Popover>
 
                         {!isToday && (
-                            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())}>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                                router.push('?', { scroll: false });
+                                setCurrentDate(new Date());
+                            }}>
                                 今日へ戻る
                             </Button>
                         )}
                     </div>
                 </div>
                 {/* Metrics Row */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar md:justify-start">
-                    <div className="flex items-center gap-1 border-r pr-2 shrink-0">
+                <div className="flex items-center gap-4 py-2 px-1 mb-2 border-b overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-2 pr-4 border-r min-w-max">
                         <div className="flex flex-col items-center min-w-[30px]">
                             <span className="text-[9px] text-muted-foreground">在籍</span>
                             <span className="text-xs font-bold">{metrics.totalEnrolled}</span>
@@ -371,6 +401,11 @@ export function DailyAttendanceList() {
                         <div className="flex flex-col items-center bg-red-50 border border-red-100 rounded px-2 py-1 min-w-[50px]">
                             <span className="text-[9px] text-red-600">欠席</span>
                             <span className="text-sm font-bold text-red-700">{metrics.absent}</span>
+                        </div>
+                        {/* New Staff Metric */}
+                        <div className="flex flex-col items-center bg-indigo-50 border border-indigo-100 rounded px-2 py-1 min-w-[50px]">
+                            <span className="text-[9px] text-indigo-600">職員</span>
+                            <span className="text-sm font-bold text-indigo-700">{metrics.staffOnDuty}</span>
                         </div>
                     </div>
                 </div>

@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, Banknote, FileText, LogOut, Settings, LogIn } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { StaffNotificationProvider } from "@/contexts/staff-notification-context";
 import { auth } from "@/lib/firebase/client";
-import { getSystemSettings } from "@/lib/firestore";
+import { getSystemSettings, getPendingReservationsCount } from "@/lib/firestore";
 import { StaffNotificationToast } from "@/components/admin/staff-notification-toast";
 import {
     DropdownMenu,
@@ -39,6 +39,12 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const { mode, setMode } = useAdminMode();
     const { role, loading } = useAuth();
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        const unsubscribe = getPendingReservationsCount(count => setPendingCount(count));
+        return () => unsubscribe();
+    }, []);
 
     // RBAC Check
     useEffect(() => {
@@ -92,8 +98,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         { href: "/admin/users", label: "児童名簿", icon: Users },
         { href: "/admin/finance", label: "金銭管理", icon: Banknote },
         { href: "/admin/documents", label: "書類管理", icon: FileText },
-        { href: "/admin/staff", label: "職員管理", icon: Users },
-        { href: "/admin/settings", label: "設定", icon: Settings },
+        { href: "/staff/home", label: "職員ポータル", icon: LogIn },
+        { href: "/admin/settings", label: "システム設定", icon: Settings },
     ];
 
     return (
@@ -103,7 +109,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 <div className="p-6 border-b">
                     <h1 className="text-xl font-bold tracking-tight text-primary">きらきら児童クラブ管理</h1>
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver 7.3</p>
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver 2.2.2</p>
                         <p className="text-[10px] text-muted-foreground/80">ゆめの森放課後児童クラブ</p>
                     </div>
                     <div className="flex items-center space-x-2 mt-4 bg-gray-50 p-2 rounded-md border">
@@ -118,10 +124,15 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                         <Link key={item.href} href={item.href}>
                             <Button
                                 variant={pathname.startsWith(item.href) ? "secondary" : "ghost"}
-                                className={cn("w-full justify-start gap-2", pathname.startsWith(item.href) && "font-bold")}
+                                className={cn("w-full justify-start gap-2 relative", pathname.startsWith(item.href) && "font-bold")}
                             >
                                 <item.icon className="h-4 w-4" />
                                 {item.label}
+                                {item.href === "/admin/calendar" && pendingCount > 0 && (
+                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center animate-in zoom-in">
+                                        {pendingCount}
+                                    </span>
+                                )}
                             </Button>
                         </Link>
                     ))}
@@ -149,7 +160,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                         <span className="text-sm font-medium text-muted-foreground">
                             {navItems.find(item => pathname.startsWith(item.href))?.label || "管理画面"}
                         </span>
-                        <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">Ver 7.3</span>
+                        <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">Ver 2.2.2</span>
                     </div>
                     <div className="flex-1 overflow-auto p-4 md:p-8">
                         {children}
@@ -164,9 +175,14 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     <LayoutDashboard className="h-6 w-6" />
                     <span className="text-[10px]">ホーム</span>
                 </Link>
-                <Link href="/admin/calendar" className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg", pathname.startsWith("/admin/calendar") ? "text-primary bg-primary/5" : "text-muted-foreground")}>
+                <Link href="/admin/calendar" className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg relative", pathname.startsWith("/admin/calendar") ? "text-primary bg-primary/5" : "text-muted-foreground")}>
                     <Calendar className="h-6 w-6" />
                     <span className="text-[10px]">予約</span>
+                    {pendingCount > 0 && (
+                        <span className="absolute top-1 right-3 bg-red-500 text-white text-[9px] font-bold px-1 py-0 rounded-full min-w-[14px] text-center">
+                            {pendingCount}
+                        </span>
+                    )}
                 </Link>
                 <Link href="/admin/documents" className={cn("flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-lg", pathname.startsWith("/admin/documents") ? "text-primary bg-primary/5" : "text-muted-foreground")}>
                     <FileText className="h-6 w-6" />

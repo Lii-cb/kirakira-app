@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,23 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { submitReservations, getReservationsForChild, cancelReservation } from "@/lib/firestore";
-import { Reservation, Child } from "@/types/firestore";
-import { Trash2, Cookie, User } from "lucide-react";
-import { auth, db } from "@/lib/firebase/client";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
-import { useRouter } from "next/navigation";
+import { getReservations, updateReservationStatus, getChildren, submitReservations, subscribeReservationsForChild, cancelReservation } from "@/lib/firestore";
+import { Reservation } from "@/types/firestore";
+import { Trash2, User } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { ja } from "date-fns/locale";
-import { SIBLING_COLORS } from "@/lib/constants";
-import { ChildData } from "@/types/firestore";
+import { useParentChildren, ChildData } from "@/hooks/use-parent-children";
 
 
-export default function ParentReservePage() {
-    const [childrenData, setChildrenData] = useState<ChildData[]>([]);
+function ParentReserveContent() {
+    const searchParams = useSearchParams();
+    const childIdParam = searchParams.get("childId");
+    const { childrenData, loading, isAdminViewing } = useParentChildren(childIdParam);
+
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const router = useRouter();
 
     const [dates, setDates] = useState<Date[] | undefined>([]);
     const [selectedTime, setSelectedTime] = useState("1700");
@@ -36,100 +33,36 @@ export default function ParentReservePage() {
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    // Initial Data Fetch (Auth & Children)
+    // Set first child as active when children load
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                router.push("/parent/login");
-                return;
-            }
+        if (childrenData.length > 0 && !activeChildId) {
+            setActiveChildId(childrenData[0].id);
+        }
+    }, [childrenData, activeChildId]);
 
-            try {
-                // 1. Fetch Child IDs linked to Parent
-                let targetChildIds: string[] = [];
-                const parentQuery = query(collection(db, "parents"), where("email", "==", user.email));
-                const parentSnapshot = await getDocs(parentQuery);
-
-                if (!parentSnapshot.empty) {
-                    const parentData = parentSnapshot.docs[0].data();
-                    targetChildIds = parentData.childIds || [];
-                } else {
-                    // Fallback
-                    const q = query(collection(db, "children"), where("authorizedEmails", "array-contains", user.email));
-                    const snapshot = await getDocs(q);
-                    targetChildIds = snapshot.docs.map(d => d.id);
-                }
-
-                if (targetChildIds.length === 0) {
-                    // Fallback 2
-                    const q = query(collection(db, "children"), where("authorizedEmails", "array-contains", user.email));
-                    const snapshot = await getDocs(q);
-                    const directIds = snapshot.docs.map(d => d.id);
-                    targetChildIds = Array.from(new Set([...targetChildIds, ...directIds]));
-                }
-
-                if (targetChildIds.length === 0) {
-                    setLoading(false);
-                    return;
-                }
-
-                // 2. Fetch Child Details
-                const childrenPromises = targetChildIds.map(async (id, index) => {
-                    const d = await getDoc(doc(db, "children", id));
-                    if (d.exists()) {
-                        return {
-                            id: d.id,
-                            master: d.data() as Child,
-                            colorTheme: SIBLING_COLORS[index % SIBLING_COLORS.length]
-                        };
-                    }
-                    return null;
-                });
-
-                const loadedChildren = (await Promise.all(childrenPromises)).filter((c): c is ChildData => c !== null);
-                setChildrenData(loadedChildren);
-
-                if (loadedChildren.length > 0) {
-                    setActiveChildId(loadedChildren[0].id);
-                }
-                setLoading(false);
-
-            } catch (err) {
-                console.error("Error fetching children:", err);
-                setLoading(false);
-            }
-        });
-
-        return () => unsubscribe();
-    }, [router]);
-
-    // Fetch Reservations when Active Child Changes
+    // Subscribe to Reservations when Active Child Changes
     useEffect(() => {
         if (!activeChildId) return;
 
-        const loadData = async () => {
-            const resData = await getReservationsForChild(activeChildId);
-            setReservations(resData);
+        const unsubscribe = subscribeReservationsForChild(activeChildId, (data) => {
+            setReservations(data);
+        });
 
-            // Reset form
-            setDates([]);
-            setWantsSnack(true);
-            setSelectedTime("1700");
+        // Reset form
+        setDates([]);
+        setWantsSnack(true);
+        setSelectedTime("1700");
 
-            const activeChild = childrenData.find(c => c.id === activeChildId);
-            if (activeChild?.master.snackConfig?.isExempt) {
-                setWantsSnack(false);
-            }
-        };
-        loadData();
+        const activeChild = childrenData.find(c => c.id === activeChildId);
+        if (activeChild?.master.snackConfig?.isExempt) {
+            setWantsSnack(false);
+        }
+
+        return () => unsubscribe();
     }, [activeChildId, childrenData]);
 
 
-    const fetchHistory = async () => {
-        if (!activeChildId) return;
-        const data = await getReservationsForChild(activeChildId);
-        setReservations(data);
-    };
+
 
     // Derived State
     const activeChild = childrenData.find(c => c.id === activeChildId);
@@ -138,7 +71,7 @@ export default function ParentReservePage() {
     const isDateDisabled = (date: Date) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        if (date < today) return true;
+        if (date < today && !isAdminViewing) return true;
 
         return bookedDates.some(booked =>
             booked.getFullYear() === date.getFullYear() &&
@@ -182,10 +115,13 @@ export default function ParentReservePage() {
 
             alert(`${daysCount}件の予約リクエストを送信しました。\n予定利用料: ${totalEstimatedFee}円`);
             setDates([]);
-            fetchHistory();
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("予約に失敗しました。");
+            if (error.code === 'permission-denied') {
+                alert("予約の送信権限がありません。ログインし直すか、管理者にお問い合わせください。 (Code: PD)");
+            } else {
+                alert("予約に失敗しました。通信環境を確認してください。");
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -195,7 +131,7 @@ export default function ParentReservePage() {
         if (!selectedReservation) return;
 
         const todayStr = new Date().toISOString().split('T')[0];
-        if (selectedReservation.date < todayStr) {
+        if (selectedReservation.date < todayStr && !isAdminViewing) {
             alert("過去の予約は取り消せません。");
             return;
         }
@@ -206,7 +142,6 @@ export default function ParentReservePage() {
             await cancelReservation(selectedReservation.id);
             alert("予約を取り消しました。");
             setIsDialogOpen(false);
-            fetchHistory();
         } catch (error) {
             console.error(error);
             alert("取り消しに失敗しました。");
@@ -231,14 +166,23 @@ export default function ParentReservePage() {
 
     if (childrenData.length === 0) {
         return (
-            <div className="p-4 text-center">
-                <p>登録されている児童が見つかりません。</p>
+            <div className="p-8 text-center space-y-4">
+                <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+                    <p className="text-orange-800 font-bold">登録されている児童が見つかりません。</p>
+                    <p className="text-sm text-orange-700 mt-1">施設から配布されたメールアドレスでログインしているか確認してください。登録がまだの場合は職員にお伝えください。</p>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-6 max-w-lg mx-auto pb-20">
+            {isAdminViewing && (
+                <div className="bg-red-50 border border-red-200 p-3 mx-2 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse"></div>
+                    <p className="text-xs font-bold text-red-700">管理者モードとして閲覧・予約代行中</p>
+                </div>
+            )}
             <div className="px-2 space-y-2">
                 <h2 className="text-xl font-bold">利用予約</h2>
 
@@ -449,5 +393,17 @@ export default function ParentReservePage() {
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+export default function ParentReservePage() {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center">
+                <span className="animate-pulse text-blue-500 text-sm">Loading...</span>
+            </div>
+        }>
+            <ParentReserveContent />
+        </Suspense>
     );
 }

@@ -21,6 +21,7 @@ export default function ParentLoginPage() {
         try {
             const provider = new GoogleAuthProvider();
             const result = await signInWithPopup(auth, provider);
+            // バージョン表示 | フッターに `Ver 2.2.1` 表示
             const user = result.user;
 
             if (!user.email) {
@@ -31,14 +32,15 @@ export default function ParentLoginPage() {
 
             // Check 1: Admin only (NOT staff) - admins can access parent portal
             const staffId = user.email.replace(/[.#$[\]]/g, "_");
+            const VERSION = "Ver 2.2.2";
             const staffQuery = query(collection(db, "staff_users"), where("email", "==", user.email));
             const staffSnapshot = await getDocs(staffQuery);
 
             if (!staffSnapshot.empty) {
                 const staffData = staffSnapshot.docs[0].data();
                 if (staffData.isActive && staffData.role === "admin") {
-                    // Admin can access parent portal
-                    router.push("/parent/home");
+                    // Admin should go to admin dashboard by default
+                    router.push("/admin/dashboard");
                     return;
                 }
                 // Staff (role !== "admin") cannot access parent portal
@@ -100,7 +102,7 @@ export default function ParentLoginPage() {
                     <CardTitle className="text-2xl text-center font-bold">保護者ログイン</CardTitle>
                     <CardDescription className="text-center">
                         Googleアカウントでログインしてください<br />
-                        <span className="text-xs text-muted-foreground">Ver 7.3</span>
+                        <span className="text-[10px] text-slate-400">Ver 2.2.2</span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

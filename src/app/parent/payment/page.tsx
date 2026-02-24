@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { getReservationsForChild, getPaymentsForChild, addPaymentRequest } from "@/lib/firestore";
 import { Reservation, Payment } from "@/types/firestore";
 import { useParentChildren, ChildData } from "@/hooks/use-parent-children";
+import { useSearchParams } from "next/navigation";
 
-export default function ParentPaymentPage() {
-    const { childrenData, loading: childrenLoading } = useParentChildren();
+function ParentPaymentContent() {
+    const searchParams = useSearchParams();
+    const childIdParam = searchParams.get("childId");
+    const { childrenData, loading: childrenLoading, isAdminViewing } = useParentChildren(childIdParam);
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
@@ -105,6 +108,12 @@ export default function ParentPaymentPage() {
 
     return (
         <div className="space-y-6 max-w-lg mx-auto pb-20">
+            {isAdminViewing && (
+                <div className="bg-red-50 border border-red-200 p-3 mx-2 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="h-2 w-2 rounded-full bg-red-600 animate-pulse"></div>
+                    <p className="text-xs font-bold text-red-700">管理者モードとして閲覧・操作中</p>
+                </div>
+            )}
             <h2 className="text-xl font-bold px-2">利用料残高</h2>
 
             {/* Child Selector */}
@@ -233,5 +242,15 @@ export default function ParentPaymentPage() {
                 </>
             )}
         </div>
+    );
+}
+
+export default function ParentPaymentPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex justify-center p-10"><Spinner /></div>
+        }>
+            <ParentPaymentContent />
+        </Suspense>
     );
 }

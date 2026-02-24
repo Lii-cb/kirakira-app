@@ -6,13 +6,20 @@ service cloud.firestore {
     
     // Check if user is admin or staff
     // Checks existence of staff_user document. Matches sanitized email ID.
+    // Chaining replace for multiple dots since Firestore replace is not global.
+    // Sanitize email for document ID. Replace special chars with underscores.
+    // Chaining replace for multiple dots since Firestore replace is not global.
+    function sanitizeEmail(email) {
+      return email.replace('[.]', '_').replace('[.]', '_').replace('[.]', '_').replace('#', '_').replace('[$]', '_').replace('\\[', '_').replace('\\]', '_');
+    }
+
     function isStaff() {
-      return request.auth != null && exists(/databases/$(database)/documents/staff_users/$(request.auth.token.email.replace('[.]', '_').replace('#', '_').replace('[$]', '_').replace('\\[', '_').replace('\\]', '_')));
+      return request.auth != null && exists(/databases/$(database)/documents/staff_users/$(sanitizeEmail(request.auth.token.email)));
     }
 
     // Check if user is admin (role == "admin" in staff_users doc)
     function isAdmin() {
-      let staffDoc = get(/databases/$(database)/documents/staff_users/$(request.auth.token.email.replace('[.]', '_').replace('#', '_').replace('[$]', '_').replace('\\[', '_').replace('\\]', '_')));
+      let staffDoc = get(/databases/$(database)/documents/staff_users/$(sanitizeEmail(request.auth.token.email)));
       return request.auth != null && staffDoc.data.role == "admin";
     }
     
