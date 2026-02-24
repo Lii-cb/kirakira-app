@@ -229,7 +229,7 @@ export default function AdminCalendarPage() {
                                                     ) : (
                                                         reservations.map(res => {
                                                             const child = children.get(res.childId.trim());
-                                                            const displayName = child?.name || (child as any)?.fullName || (res as any).childName || "不明な児童";
+                                                            const displayName = child?.name || (child as any)?.fullName || (child as any)?.氏名 || (res as any).childName || "不明な児童";
                                                             return (
                                                                 <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
                                                                     <td className="p-3 font-bold text-slate-700">{displayName}</td>

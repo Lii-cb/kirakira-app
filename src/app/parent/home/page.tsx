@@ -406,10 +406,10 @@ function ParentHomeContent() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <Avatar className={`h-12 w-12 border ${colorTheme.border}`}>
-                                                <AvatarFallback className={`${colorTheme.light} ${colorTheme.text} font-bold`}>{(master.name || (master as any).fullName || "?")[0]}</AvatarFallback>
+                                                <AvatarFallback className={`${colorTheme.light} ${colorTheme.text} font-bold`}>{(master.name || (master as any).fullName || (master as any).氏名 || "?")[0]}</AvatarFallback>
                                             </Avatar>
                                             <div>
-                                                <h2 className="font-bold text-lg">{master.name || (master as any).fullName || "名前なし"}</h2>
+                                                <h2 className="font-bold text-lg">{master.name || (master as any).fullName || (master as any).氏名 || "名前なし"}</h2>
                                                 <Badge className={`${statusColor} border-none text-[10px] h-5`}>{statusLabel}</Badge>
                                             </div>
                                         </div>
