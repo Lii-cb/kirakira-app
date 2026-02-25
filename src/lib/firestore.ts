@@ -108,14 +108,11 @@ export const updateAttendanceStatus = async (
     await setDoc(docRef, { ...data }, { merge: true });
 };
 
-// Function to ensure all children have an attendance record for today (Mock Scheduler)
+// Function to ensure all children have an attendance record for today (Incremental update)
 export const ensureAttendanceRecords = async (date: string, children: Child[]) => {
-    // In a real app, a backend function would do this at midnight.
-    // Here we check if records exist for key children, if not, create "Scheduled" records.
-    // For simplicity in this demo, we will create records for ALL children as "Scheduled" if they don't exist.
-
-    const snapshot = await getDocs(query(collection(db, "attendance"), where("date", "==", date), limit(1)));
-    if (!snapshot.empty) return;
+    // Fetch all existing attendance records for this date at once to minimize queries
+    const existingSnapshot = await getDocs(query(collection(db, "attendance"), where("date", "==", date)));
+    const existingChildIds = new Set(existingSnapshot.docs.map(doc => doc.data().childId));
 
     // Fetch confirmed reservations for today to reflect accurate scheduled times
     const reservations = await getReservations(date);
@@ -127,30 +124,31 @@ export const ensureAttendanceRecords = async (date: string, children: Child[]) =
     });
 
     const batchPromises = children.map(async (child) => {
+        // Skip if attendance record already exists
+        if (existingChildIds.has(child.id)) return;
+
         const docId = `${date}-${child.id}`;
         const docRef = doc(db, "attendance", docId);
-        const docSnap = await getDoc(docRef);
 
-        if (!docSnap.exists()) {
-            const reservation = reservationMap.get(child.id);
-            // Use reservation time if exists, otherwise default
-            const initialTime = reservation ? reservation.time : "14:00-17:00";
+        const reservation = reservationMap.get(child.id);
+        // Use reservation time if exists, otherwise default
+        const initialTime = reservation ? reservation.time : "14:00-17:00";
 
-            const initialRecord: AttendanceRecord = {
-                id: docId,
-                date,
-                childId: child.id,
-                childName: child.name,
-                className: `${child.grade}年`,
-                // If they have a reservation, they are "scheduled", otherwise they might be just "registered" (but we treat all as pending for now)
-                status: "pending",
-                reservationTime: initialTime,
-                returnMethod: child.defaultReturnMethod || "お迎え",
-                arrivalTime: null,
-                departureTime: null,
-            };
-            await setDoc(docRef, initialRecord);
-        }
+        const initialRecord: AttendanceRecord = {
+            id: docId,
+            date,
+            childId: child.id,
+            childName: child.name,
+            className: `${child.grade}年`,
+            // If they have a reservation, they are "scheduled", otherwise they might be just "registered" (but we treat all as pending for now)
+            status: "pending",
+            reservationTime: initialTime,
+            hasSnack: reservation?.hasSnack || false,
+            returnMethod: child.defaultReturnMethod || "お迎え",
+            arrivalTime: null,
+            departureTime: null,
+        };
+        await setDoc(docRef, initialRecord);
     });
 
     await Promise.all(batchPromises);

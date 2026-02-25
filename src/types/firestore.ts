@@ -53,7 +53,6 @@ export interface Child {
     name: string;
     kana: string;
     grade: number; // 1-6
-    phoneNumbers?: string[]; // List of contact numbers (Max 2)
     parentIds?: string[]; // IDs of the parents (Optional: may not exist for legacy records)
     defaultReturnMethod?: string; // "お迎え" etc.
     snackConfig?: {

@@ -109,7 +109,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 <div className="p-6 border-b">
                     <h1 className="text-xl font-bold tracking-tight text-primary">きらきら児童クラブ管理</h1>
                     <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver 2.2.2</p>
+                        <p className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full inline-block mt-1">Ver 2.2.3</p>
                         <p className="text-[10px] text-muted-foreground/80">ゆめの森放課後児童クラブ</p>
                     </div>
                     <div className="flex items-center space-x-2 mt-4 bg-gray-50 p-2 rounded-md border">
@@ -160,7 +160,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                         <span className="text-sm font-medium text-muted-foreground">
                             {navItems.find(item => pathname.startsWith(item.href))?.label || "管理画面"}
                         </span>
-                        <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">Ver 2.2.2</span>
+                        <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">Ver 2.2.3</span>
                     </div>
                     <div className="flex-1 overflow-auto p-4 md:p-8">
                         {children}

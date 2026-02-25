@@ -19,6 +19,7 @@ interface AttendanceRowProps {
     onCheckOut: (id: string) => void;
     onTimeChange: (id: string, field: 'arrivalTime' | 'departureTime', value: string) => void;
     onCall: (id: string, name: string) => void;
+    isLate?: boolean;
 }
 
 function AttendanceRowComponent({
@@ -29,12 +30,12 @@ function AttendanceRowComponent({
     onCheckIn,
     onCheckOut,
     onTimeChange,
-    onCall
+    onCall,
+    isLate = false
 }: AttendanceRowProps) {
     const [schedStart, schedEnd] = child.reservationTime.split("-");
     const isPickup = child.returnMethod === "お迎え";
     const hasPending = child.changeRequest?.status === "pending";
-    const phones = master?.phoneNumbers || [];
 
     const getReturnMethodIcon = (method: string) => {
         switch (method) {
@@ -82,38 +83,20 @@ function AttendanceRowComponent({
                 </div>
             </TableCell>
             <TableCell className="px-2 font-medium text-xs text-center">{child.className}</TableCell>
-            <TableCell className="px-2 text-sm font-medium truncate max-w-[90px]" title={child.childName}>
+            <TableCell className={cn("px-2", isLate && "bg-red-50 animate-pulse")}>
                 <div className="flex items-center justify-between gap-1">
-                    <span>{child.childName}</span>
+                    <div className="flex flex-col">
+                        <span className={cn("font-bold text-sm truncate max-w-[90px]", isLate && "text-red-600")}>{child.childName}</span>
+                        {isLate && <Badge variant="destructive" className="text-[8px] h-3 px-1 py-0 w-fit">未着アラート</Badge>}
+                    </div>
                     <div className="flex gap-1">
-                        {phones.length > 0 && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-500 hover:text-blue-700 hover:bg-blue-50 shrink-0" onClick={e => e.stopPropagation()}>
-                                        <Phone className="h-3 w-3" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-2">
-                                    <div className="flex flex-col gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground">連絡先</span>
-                                        {phones.map((p, i) => (
-                                            <a key={i} href={`tel:${p}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline bg-blue-50 p-2 rounded">
-                                                <Phone className="h-3 w-3" /> {p}
-                                            </a>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        )}
                         <Button
                             variant="ghost"
                             size="icon"
                             className="h-6 w-6 text-orange-400 hover:text-orange-600 hover:bg-orange-50 shrink-0"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`${child.childName}さんの呼び出しを行いますか？`)) {
-                                    onCall(child.childId, child.childName);
-                                }
+                                onCall(child.childId, child.childName);
                             }}
                         >
                             <Megaphone className="h-3 w-3" />

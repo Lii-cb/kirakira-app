@@ -65,8 +65,9 @@ export function DailyAttendanceList() {
     const searchParams = useSearchParams();
     const dateParam = searchParams.get("date");
 
+    // Master Data Map
     const [children, setChildren] = useState<AttendanceRecord[]>([]);
-    const [masterChildren, setMasterChildren] = useState<Record<string, Child>>({}); // Master Data Map
+    const [masterChildren, setMasterChildren] = useState<Record<string, Child>>({});
     const [selectedChild, setSelectedChild] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -97,6 +98,21 @@ export function DailyAttendanceList() {
             setMasterChildren(map);
         });
     }, []);
+
+    // Sync Attendance Records (Auto-ensure)
+    useEffect(() => {
+        const syncData = async () => {
+            try {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                const masterData = await getChildren();
+                const { ensureAttendanceRecords } = await import("@/lib/firestore");
+                await ensureAttendanceRecords(dateStr, masterData);
+            } catch (error) {
+                console.error("Failed to sync attendance records:", error);
+            }
+        };
+        syncData();
+    }, [currentDate]);
 
     // Initial Data Fetch & Subscription
     useEffect(() => {
@@ -465,19 +481,36 @@ export function DailyAttendanceList() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredChildren.map((child) => (
-                                <AttendanceRow
-                                    key={child.id}
-                                    child={child}
-                                    master={masterChildren[child.childId]}
-                                    timeOptions={timeOptions}
-                                    onReturnMethodClick={handleReturnMethodClick}
-                                    onCheckIn={handleCheckIn}
-                                    onCheckOut={handleCheckOut}
-                                    onTimeChange={handleTimeChange}
-                                    onCall={handleCall}
-                                />
-                            ))}
+                            {filteredChildren.map((child) => {
+                                // Calculate isLate
+                                const isToday = currentDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                                let isLate = false;
+                                if (isToday && child.status === "pending") {
+                                    const startTimeStr = child.reservationTime.split("-")[0];
+                                    if (startTimeStr) {
+                                        const [h, m] = startTimeStr.split(":").map(Number);
+                                        const resStart = new Date();
+                                        resStart.setHours(h, m, 0, 0);
+                                        const limit = new Date(resStart.getTime() + 30 * 60000); // 30 mins buffer
+                                        isLate = new Date() > limit;
+                                    }
+                                }
+
+                                return (
+                                    <AttendanceRow
+                                        key={child.id}
+                                        child={child}
+                                        master={masterChildren[child.childId]}
+                                        timeOptions={timeOptions}
+                                        onReturnMethodClick={handleReturnMethodClick}
+                                        onCheckIn={handleCheckIn}
+                                        onCheckOut={handleCheckOut}
+                                        onTimeChange={handleTimeChange}
+                                        onCall={sendCall}
+                                        isLate={isLate}
+                                    />
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>

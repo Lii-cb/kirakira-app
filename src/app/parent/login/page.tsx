@@ -102,7 +102,7 @@ export default function ParentLoginPage() {
                     <CardTitle className="text-2xl text-center font-bold">保護者ログイン</CardTitle>
                     <CardDescription className="text-center">
                         Googleアカウントでログインしてください<br />
-                        <span className="text-[10px] text-slate-400">Ver 2.2.2</span>
+                        <span className="text-[10px] text-slate-400">Ver 2.2.3</span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

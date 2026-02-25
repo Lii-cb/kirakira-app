@@ -542,7 +542,7 @@ function ParentHomeContent() {
                                             disabled={selectedDates.length === 0 || isSubmitting}
                                             onClick={handleReserveSubmit}
                                         >
-                                            {isSubmitting ? "送信中..." : "リクエストを送信"}
+                                            {isSubmitting ? "送信中..." : `リクエスト送信 (${selectedDates.length * (hasSnack ? 100 : 0)}円)`}
                                         </Button>
                                     </div>
                                 )}
@@ -605,7 +605,7 @@ function ParentHomeContent() {
                             <div key={child.id} className="space-y-2">
                                 <div className="flex items-center gap-2 px-1">
                                     <div className={`w-1 h-3 rounded-full ${child.colorTheme.bg}`} />
-                                    <h3 className="text-xs font-bold text-gray-600">{child.master.name || (child.master as any).fullName || "名前なし"} さんの予約</h3>
+                                    <h3 className="text-xs font-bold text-gray-600">{child.master.name || (child.master as any).fullName || "名前なし"} さんの予約確定分概算: {upcoming.filter(r => r.status === "confirmed").reduce((sum, r) => sum + (r.hasSnack ? 100 : 0), 0)}円</h3>
                                 </div>
                                 <div className="bg-white rounded-xl border shadow-sm divide-y">
                                     {upcoming.length === 0 ? <p className="p-6 text-center text-xs text-muted-foreground">今後の予約はありません</p> :

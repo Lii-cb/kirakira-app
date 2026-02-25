@@ -1,10 +1,9 @@
 /**
  * gas_script_v7_unified.js
- * Ver 7.2.3: Definitive Consolidated Version
- * 
+    * Ver 7.3.1: Accounting & Privacy Update (Bug fix)
+        * 
  * [重要] このコード「だけ」をエディタに貼り付けてください。
- * 全てを選択(Ctrl+A)して削除(Delete)した後、これを貼り付けることで、
- * 古いバージョン（6.0, 7.1など）のメニューを完全に消去できます。
+ * 児童の個人情報保護（電話番号削除）と会計用データ出力を追加。
  */
 
 // ========== Configuration ==========
@@ -24,7 +23,8 @@ const SHEETS = {
     PARENTS: "Master_Parents",
     SETTINGS: "Settings",
     STAFF: "Staff",
-    IMPORT: "Import"
+    IMPORT: "Import",
+    ACCOUNTING: "Accounting_Archive"
 };
 
 // Initialize Firestore
@@ -35,10 +35,11 @@ const firestore = FirestoreApp.getFirestore(FIREBASE_CONFIG.email, FIREBASE_CONF
 // ==========================================
 function onOpen() {
     SpreadsheetApp.getUi()
-        .createMenu('🌟 KiraKira Ver 7.2')
+        .createMenu('🌟 KiraKira Ver 7.3.1')
         .addSubMenu(SpreadsheetApp.getUi().createMenu('📊 データ同期')
             .addItem('全データを同期', 'syncAllData')
-            .addItem('職員データを同期', 'syncStaffOnly'))
+            .addItem('職員データを同期', 'syncStaffOnly')
+            .addItem('会計用データを出力', 'syncAttendanceToAccounting'))
         .addSubMenu(SpreadsheetApp.getUi().createMenu('📥 インポート')
             .addItem('新規メンバーをインポート', 'importNewMembers'))
         .addItem('🔄 Membersシートから児童データを復元', 'restoreFromMembers')
@@ -51,11 +52,12 @@ function onOpen() {
  */
 function showVersion() {
     Browser.msgBox(
-        "🌟 KiraKira Ver 7.2.3\n\n" +
-        "最新の統合スクリプトです。\n" +
-        "- 職員リストの列位置（名前/メール）を自動判別\n" +
-        "- 旧メニューの重複解消済み\n\n" +
-        "これ以外のメニュー（Ver 6.0等）が表示される場合は、ページをリロードしてください。"
+        "🌟 KiraKira Ver 7.3.1\n\n" +
+        "2026-02-24 アップデート:\n" +
+        "- 会計用データ出力（Accounting_Archive）機能追加\n" +
+        "- 児童の電話番号管理を削除（プライバシー保護）\n" +
+        "- 欠席時の料金0円判定をサポート\n\n" +
+        "スプレッドシートのメニューが表示されない場合は、ページをリロードしてください。"
     );
 }
 
@@ -69,6 +71,7 @@ function syncAllData() {
     syncMembers(ss);
     syncSettings(ss);
     syncStaff(ss);
+    syncAttendanceToAccounting();
     Browser.msgBox("✅ すべてのデータを同期しました。");
 }
 
@@ -125,13 +128,12 @@ function syncParents(ss) {
 }
 
 function syncMembers(ss) {
-    let sheet = ensureSheet(ss, SHEETS.MEMBERS, [["ID", "学年", "氏名", "フリガナ", "ParentIDs", "電話番号", "備考"]]);
+    let sheet = ensureSheet(ss, SHEETS.MEMBERS, [["ID", "学年", "氏名", "フリガナ", "ParentIDs", "備考"]]);
     const allDocs = firestore.getDocuments("children");
     const rows = (allDocs || []).map(doc => {
         const f = doc.fields;
         return [getValue(f.id), getValue(f.grade), getValue(f.name), getValue(f.kana),
         Array.isArray(getValue(f.parentIds)) ? getValue(f.parentIds).join(",") : "",
-        Array.isArray(getValue(f.phoneNumbers)) ? getValue(f.phoneNumbers).join(",") : "",
         getValue(f.notes)];
     });
     writeSheetData(sheet, rows);
@@ -162,10 +164,59 @@ function writeSheetData(sheet, rows) {
 }
 function getValue(field) {
     if (!field) return "";
-    return field.stringValue !== undefined ? field.stringValue : (field.integerValue !== undefined ? field.integerValue : (field.arrayValue ? field.arrayValue.values.map(v => getValue(v)) : ""));
+    if (field.stringValue !== undefined) return field.stringValue;
+    if (field.integerValue !== undefined) return field.integerValue;
+    if (field.booleanValue !== undefined) return field.booleanValue;
+    if (field.arrayValue) {
+        return (field.arrayValue.values || []).map(v => getValue(v));
+    }
+    return "";
 }
 function upsertDocument(path, data) {
     try { firestore.createDocument(path, data); } catch (e) { try { firestore.updateDocument(path, data); } catch (e2) { } }
+}
+
+/**
+ * 📊 出席データを会計用にスプレッドシートへ出力
+ */
+function syncAttendanceToAccounting() {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const header = [["日付", "児童ID", "氏名", "学年", "状態", "おやつ", "算定料金", "予約時間", "入室", "退室", "同期日時"]];
+    let sheet = ensureSheet(ss, SHEETS.ACCOUNTING, header);
+
+    const allDocs = firestore.getDocuments("attendance");
+    if (!allDocs || allDocs.length === 0) return;
+
+    const timestamp = new Date().toLocaleString("ja-JP");
+    const rows = allDocs.map(doc => {
+        const f = doc.fields;
+        const status = getValue(f.status);
+        const hasSnack = getValue(f.hasSnack) === true || getValue(f.hasSnack) === "true";
+
+        // 欠席なら0円、そうでなければおやつ代100円（おやつありの場合）
+        let fee = 0;
+        if (status !== "absent" && hasSnack) {
+            fee = 100;
+        }
+
+        return [
+            getValue(f.date),
+            getValue(f.childId),
+            getValue(f.childName),
+            getValue(f.className),
+            status,
+            hasSnack ? "あり" : "なし",
+            fee,
+            getValue(f.reservationTime),
+            getValue(f.arrivalTime),
+            getValue(f.departureTime),
+            timestamp
+        ];
+    });
+
+    // 日付順にソート
+    rows.sort((a, b) => (a[0] > b[0] ? 1 : -1));
+    writeSheetData(sheet, rows);
 }
 
 // 簡易インポート
@@ -207,7 +258,7 @@ function restoreFromMembers() {
 
     const data = sheet.getDataRange().getValues();
     // ヘッダー行（1行目）をスキップ
-    // フォーマット: [0]ID, [1]学年, [2]氏名, [3]フリガナ, [4]ParentIDs, [5]電話番号, [6]備考
+    // フォーマット: [0]ID, [1]学年, [2]氏名, [3]フリガナ, [4]ParentIDs, [5]備考
     let restored = 0;
     let skipped = 0;
 
@@ -231,7 +282,6 @@ function restoreFromMembers() {
             kana: String(row[3] || "").trim(),
             grade: Number(gradeRaw) || 1,
             parentIds: String(row[4] || "").split(",").map(s => s.trim()).filter(s => s),
-            phoneNumbers: String(row[5] || "").split(",").map(s => s.trim()).filter(s => s),
             defaultReturnMethod: "お迎え",
             createdAt: new Date().toISOString()
         };
