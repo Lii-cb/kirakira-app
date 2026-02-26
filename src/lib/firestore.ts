@@ -92,6 +92,12 @@ export const subscribeTodayAttendance = (date: string, callback: (data: Attendan
     });
 };
 
+export const getAttendanceForChild = async (childId: string): Promise<AttendanceRecord[]> => {
+    const q = query(collection(db, "attendance"), where("childId", "==", childId), orderBy("date", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+};
+
 export const updateAttendanceStatus = async (
     childId: string,
     date: string,

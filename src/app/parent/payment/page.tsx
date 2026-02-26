@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wallet, PlusCircle, History, Receipt, User } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { getReservationsForChild, getPaymentsForChild, addPaymentRequest } from "@/lib/firestore";
-import { Reservation, Payment } from "@/types/firestore";
+import { Payment, Reservation, AttendanceRecord } from "@/types/firestore";
 import { useParentChildren, ChildData } from "@/hooks/use-parent-children";
 import { useSearchParams } from "next/navigation";
 
@@ -19,6 +19,7 @@ function ParentPaymentContent() {
     const { childrenData, loading: childrenLoading, isAdminViewing } = useParentChildren(childIdParam);
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
     const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [attendance, setAttendance] = useState<Record<string, AttendanceRecord>>({});
     const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(false);
     const [inputAmount, setInputAmount] = useState("");
@@ -35,12 +36,18 @@ function ParentPaymentContent() {
     const fetchData = async (childId: string) => {
         setLoading(true);
         try {
-            const [resData, payData] = await Promise.all([
+            const { getReservationsForChild, getAttendanceForChild, getPaymentsForChild } = await import("@/lib/firestore");
+            const [resData, payData, attData] = await Promise.all([
                 getReservationsForChild(childId),
                 getPaymentsForChild(childId),
+                getAttendanceForChild(childId),
             ]);
             setReservations(resData);
             setPayments(payData);
+
+            const attMap: Record<string, AttendanceRecord> = {};
+            attData.forEach(att => attMap[att.date] = att);
+            setAttendance(attMap);
         } catch (e) {
             console.error(e);
         } finally {
@@ -90,7 +97,10 @@ function ParentPaymentContent() {
 
     const totalUsed = usedReservations.reduce((sum, r) => {
         const fee = r.fee || 0;
-        const snack = (r.hasSnack && !isExempt) ? 100 : 0;
+        // Check attendance record if exists
+        const att = attendance[r.date];
+        const isAbsent = att?.status === "absent";
+        const snack = (r.hasSnack && !isExempt && !isAbsent) ? 100 : 0;
         return sum + fee + snack;
     }, 0);
 
@@ -215,8 +225,10 @@ function ParentPaymentContent() {
                         <TabsContent value="usage" className="space-y-3 mt-4">
                             {usedReservations.length === 0 ? <div className="text-center text-muted-foreground py-4">利用履歴はありません</div> :
                                 usedReservations.map(r => {
+                                    const att = attendance[r.date];
+                                    const isAbsent = att?.status === "absent";
                                     const fee = r.fee || 0;
-                                    const snack = (r.hasSnack && !isExempt) ? 100 : 0;
+                                    const snack = (r.hasSnack && !isExempt && !isAbsent) ? 100 : 0;
                                     const total = fee + snack;
                                     return (
                                         <div key={r.id} className="flex justify-between items-center bg-white p-3 rounded-lg border shadow-sm">
@@ -225,10 +237,14 @@ function ParentPaymentContent() {
                                                     <Receipt className="h-4 w-4 text-gray-500" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-bold text-gray-800">{r.date.slice(5).replace('-', '/')} 利用</div>
+                                                    <div className="font-bold text-gray-800">
+                                                        {r.date.slice(5).replace('-', '/')} 利用
+                                                        {isAbsent && <Badge variant="destructive" className="ml-2 scale-75 h-4 px-1 py-0">欠席</Badge>}
+                                                    </div>
                                                     <div className="text-xs text-muted-foreground">
                                                         基本: ¥{fee} / おやつ: ¥{snack}
                                                         {isExempt && <span className="text-orange-500 ml-1">(免除)</span>}
+                                                        {isAbsent && <span className="text-red-500 ml-1 font-bold">(欠席により0円)</span>}
                                                     </div>
                                                 </div>
                                             </div>

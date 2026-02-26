@@ -100,6 +100,7 @@ export interface AttendanceRecord {
     arrivalTime?: string | null; // "HH:mm"
     departureTime?: string | null; // "HH:mm"
     reservationTime: string; // "14:00-17:00"
+    hasSnack?: boolean;
     returnMethod: string;
     returnDetails?: string | null;
     memo?: string; // Existing: Public memo or old field? Let's treat as "Admin Memo" or "Public"? 

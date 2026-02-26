@@ -605,7 +605,13 @@ function ParentHomeContent() {
                             <div key={child.id} className="space-y-2">
                                 <div className="flex items-center gap-2 px-1">
                                     <div className={`w-1 h-3 rounded-full ${child.colorTheme.bg}`} />
-                                    <h3 className="text-xs font-bold text-gray-600">{child.master.name || (child.master as any).fullName || "名前なし"} さんの予約確定分概算: {upcoming.filter(r => r.status === "confirmed").reduce((sum, r) => sum + (r.hasSnack ? 100 : 0), 0)}円</h3>
+                                    <h3 className="text-xs font-bold text-gray-600">
+                                        {child.master.name || (child.master as any).fullName || "名前なし"} さんの予約確定分概算: {upcoming.filter(r => r.status === "confirmed").reduce((sum, r) => {
+                                            const att = allAttendance[child.id]?.[r.date];
+                                            const isAbsent = att?.status === "absent";
+                                            return sum + (r.hasSnack && !isAbsent ? 100 : 0);
+                                        }, 0)}円
+                                    </h3>
                                 </div>
                                 <div className="bg-white rounded-xl border shadow-sm divide-y">
                                     {upcoming.length === 0 ? <p className="p-6 text-center text-xs text-muted-foreground">今後の予約はありません</p> :
@@ -614,6 +620,9 @@ function ParentHomeContent() {
                                                 <div className="flex items-center gap-3">
                                                     <span className="font-bold text-gray-800">{res.date.replaceAll('-', '/')}</span>
                                                     <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-gray-500">{res.time}</span>
+                                                    {allAttendance[child.id]?.[res.date]?.status === "absent" && (
+                                                        <Badge variant="outline" className="text-[10px] text-red-600 border-red-200 bg-red-50 py-0 h-4">欠席(0円)</Badge>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <Badge variant={res.status === "confirmed" ? "secondary" : "outline"} className={res.status === "confirmed" ? "bg-green-100 text-green-700 border-none" : ""}>
