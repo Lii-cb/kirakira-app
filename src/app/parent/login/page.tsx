@@ -32,7 +32,7 @@ export default function ParentLoginPage() {
 
             // Check 1: Admin only (NOT staff) - admins can access parent portal
             const staffId = user.email.replace(/[.#$[\]]/g, "_");
-            const VERSION = "Ver 2.2.2";
+            const VERSION = "Ver 2.2.3";
             const staffQuery = query(collection(db, "staff_users"), where("email", "==", user.email));
             const staffSnapshot = await getDocs(staffQuery);
 
