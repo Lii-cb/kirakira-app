@@ -41,6 +41,7 @@ import { SIBLING_COLORS, APP_VERSION } from "@/lib/constants";
 import { ChildData } from "@/types/firestore";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatDate } from "@/lib/date";
 
 type CalendarMode = "view" | "reserve" | "change" | "news";
 
@@ -96,6 +97,7 @@ function ParentHomeContent() {
                 const s = await getSystemSettings();
                 setSettings(s);
 
+                const todayStr = formatDate();
                 let targetChildIds: string[] = [];
                 let adminMode = false;
 
@@ -150,6 +152,9 @@ function ParentHomeContent() {
                     return c;
                 }) as ChildData[];
                 setChildrenData(loadedChildren);
+                if (loadedChildren.length > 0 && !activeChildId) {
+                    setActiveChildId(loadedChildren[0].id);
+                }
 
                 // Fetch Events
                 const docs = await getDocuments();
@@ -174,7 +179,7 @@ function ParentHomeContent() {
     // Subscriptions
     useEffect(() => {
         if (childrenData.length === 0) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
 
         // Attendance Sub
         const unsubAttendance = subscribeTodayAttendance(today, (records) => {
@@ -223,7 +228,11 @@ function ParentHomeContent() {
 
     // Unified Logic
     const handleReserveSubmit = async () => {
-        if (selectedDates.length === 0 || !activeChildId) {
+        if (!activeChildId) {
+            alert("児童を選択してください。");
+            return;
+        }
+        if (selectedDates.length === 0) {
             alert("日付を選択してください。");
             return;
         }
@@ -245,7 +254,7 @@ function ParentHomeContent() {
     };
 
     const handleResClick = (res: Reservation) => {
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = formatDate();
         setSelectedRes(res);
         if (res.date < todayStr && !isAdminViewing) {
             setIsPastFixOpen(true);
@@ -300,13 +309,13 @@ function ParentHomeContent() {
 
     const handleAbsence = async () => {
         if (!activeChildId) return;
-        await updateAttendanceStatus(activeChildId, new Date().toISOString().split('T')[0], { status: "absent", memo: requestMemo });
+        await updateAttendanceStatus(activeChildId, formatDate(), { status: "absent", memo: requestMemo });
         setIsAbsenceOpen(false); setRequestMemo("");
     };
 
     const handleReturnChange = async () => {
         if (!activeChildId) return;
-        await updateAttendanceStatus(activeChildId, new Date().toISOString().split('T')[0], { returnMethod: returnValue, memo: requestMemo });
+        await updateAttendanceStatus(activeChildId, formatDate(), { returnMethod: returnValue, memo: requestMemo });
         setIsReturnOpen(false); setRequestMemo("");
     };
 
@@ -315,7 +324,7 @@ function ParentHomeContent() {
         const child = childrenData.find(c => c.id === activeChildId);
         if (!child) return;
         const newMessage = { id: `msg-${Date.now()}`, sender: 'parent' as const, senderName: "保護者", content: messageInput, timestamp: new Date().toISOString() };
-        await updateAttendanceStatus(activeChildId, new Date().toISOString().split('T')[0], { messages: [...(child.attendance?.messages || []), newMessage] });
+        await updateAttendanceStatus(activeChildId, formatDate(), { messages: [...(child.attendance?.messages || []), newMessage] });
         setMessageInput("");
     };
 
@@ -326,14 +335,30 @@ function ParentHomeContent() {
         setIsResDetailOpen(false);
     };
 
+    const handleUpdateReservation = async (data: Partial<Reservation>) => {
+        if (!selectedRes) return;
+        setIsSubmitting(true);
+        try {
+            const { updateReservation } = await import("@/lib/firestore");
+            await updateReservation(selectedRes.id, data);
+            alert("予約内容を更新しました。");
+            setIsResDetailOpen(false);
+        } catch (error) {
+            console.error(error);
+            alert("更新に失敗しました。");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     // Chat Link Logic
     const chatUrl = settings?.notifications?.staffChatUrl || (settings?.notifications?.chatEmail ? `https://chat.google.com/dm/${settings.notifications.chatEmail}` : "https://chat.google.com/");
 
     if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">読み込み中...</div>;
 
-    const getEventsForDate = (day: Date) => events.filter(e => e.eventDate === day.toISOString().split('T')[0]);
+    const getEventsForDate = (day: Date) => events.filter(e => e.eventDate === formatDate(day));
     const getResForDate = (day: Date) => {
-        const dateStr = day.toISOString().split('T')[0];
+        const dateStr = formatDate(day);
         const resList: { child: ChildData, res: Reservation }[] = [];
         childrenData.forEach(child => {
             const found = allReservations[child.id]?.find(r => r.date === dateStr);
@@ -349,13 +374,13 @@ function ParentHomeContent() {
     const modifiers = {
         closed: (date: Date) => date.getDay() === 0,
         confirmed: (date: Date) => {
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = formatDate(date);
             return childrenData.some(child =>
                 allReservations[child.id]?.some(r => r.date === dateStr && r.status === "confirmed")
             );
         },
         pending: (date: Date) => {
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = formatDate(date);
             return childrenData.some(child =>
                 allReservations[child.id]?.some(r => r.date === dateStr && r.status === "pending")
             );
@@ -516,8 +541,27 @@ function ParentHomeContent() {
                                 {calMode === "reserve" && (
                                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-4">
                                         <h4 className="text-xs font-bold text-blue-800 border-b border-blue-200 pb-1">新規予約リクエスト</h4>
+
+                                        {childrenData.length > 1 && (
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-bold">児童を選択</Label>
+                                                <Select value={activeChildId || ""} onValueChange={setActiveChildId}>
+                                                    <SelectTrigger className="h-8 text-xs">
+                                                        <SelectValue placeholder="児童を選択" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {childrenData.map(c => (
+                                                            <SelectItem key={c.id} value={c.id}>
+                                                                {c.master.name || "名前なし"}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] text-muted-foreground">選択人数: {selectedDates.length}日</Label>
+                                            <Label className="text-[10px] text-muted-foreground">選択日数: {selectedDates.length}日</Label>
                                             <p className="text-[9px] text-slate-500 leading-tight">カレンダーから複数の日付を選択できます。</p>
                                         </div>
                                         <div className="space-y-2">
@@ -539,10 +583,10 @@ function ParentHomeContent() {
                                         </div>
                                         <Button
                                             className="w-full h-9 text-xs font-bold bg-blue-600 hover:bg-blue-700 shadow-sm"
-                                            disabled={selectedDates.length === 0 || isSubmitting}
+                                            disabled={isSubmitting}
                                             onClick={handleReserveSubmit}
                                         >
-                                            {isSubmitting ? "送信中..." : `リクエスト送信 (${selectedDates.length * (hasSnack ? 100 : 0)}円)`}
+                                            {isSubmitting ? "送信中..." : selectedDates.length === 0 ? "日付を選択して下さい" : `リクエスト送信 (${selectedDates.length * (hasSnack ? 100 : 0)}円)`}
                                         </Button>
                                     </div>
                                 )}
@@ -593,7 +637,7 @@ function ParentHomeContent() {
                     </div>
                     {childrenData.map(child => {
                         const reservations = allReservations[child.id] || [];
-                        const todayStr = new Date().toISOString().split('T')[0];
+                        const todayStr = formatDate();
                         const upcoming = reservations
                             .filter(r => r.date >= todayStr)
                             .sort((a, b) => a.date.localeCompare(b.date));
@@ -606,11 +650,7 @@ function ParentHomeContent() {
                                 <div className="flex items-center gap-2 px-1">
                                     <div className={`w-1 h-3 rounded-full ${child.colorTheme.bg}`} />
                                     <h3 className="text-xs font-bold text-gray-600">
-                                        {child.master.name || (child.master as any).fullName || "名前なし"} さんの予約確定分概算: {upcoming.filter(r => r.status === "confirmed").reduce((sum, r) => {
-                                            const att = allAttendance[child.id]?.[r.date];
-                                            const isAbsent = att?.status === "absent";
-                                            return sum + (r.hasSnack && !isAbsent ? 100 : 0);
-                                        }, 0)}円
+                                        {child.master.name || (child.master as any).fullName || "名前なし"} さんの予約
                                     </h3>
                                 </div>
                                 <div className="bg-white rounded-xl border shadow-sm divide-y">
@@ -620,9 +660,6 @@ function ParentHomeContent() {
                                                 <div className="flex items-center gap-3">
                                                     <span className="font-bold text-gray-800">{res.date.replaceAll('-', '/')}</span>
                                                     <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-gray-500">{res.time}</span>
-                                                    {allAttendance[child.id]?.[res.date]?.status === "absent" && (
-                                                        <Badge variant="outline" className="text-[10px] text-red-600 border-red-200 bg-red-50 py-0 h-4">欠席(0円)</Badge>
-                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <Badge variant={res.status === "confirmed" ? "secondary" : "outline"} className={res.status === "confirmed" ? "bg-green-100 text-green-700 border-none" : ""}>
@@ -727,15 +764,58 @@ function ParentHomeContent() {
 
             <Dialog open={isResDetailOpen} onOpenChange={setIsResDetailOpen}>
                 <DialogContent>
-                    <DialogHeader><DialogTitle>予約詳細</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>予約詳細・編集</DialogTitle></DialogHeader>
                     {selectedRes && (
-                        <div className="space-y-4 py-4 text-sm font-mono">
-                            <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">日付</span><span className="font-bold">{selectedRes.date}</span></div>
-                            <div className="flex justify-between border-b pb-1"><span className="text-muted-foreground">時間</span><span className="font-bold">{selectedRes.time}</span></div>
-                            <Badge variant="outline" className="w-full justify-center bg-slate-50">{selectedRes.status === "confirmed" ? "承認済" : "承認待ち"}</Badge>
+                        <div className="space-y-4 py-4">
+                            <div className="flex justify-between items-center border-b pb-2">
+                                <span className="text-muted-foreground text-sm">日付</span>
+                                <span className="font-bold font-mono">{selectedRes.date}</span>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm font-bold">終了時間</Label>
+                                <Select
+                                    defaultValue={selectedRes.time}
+                                    onValueChange={(v) => setSelectedRes({ ...selectedRes, time: v })}
+                                >
+                                    <SelectTrigger className="h-9 font-mono">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="17:00">17:00</SelectItem>
+                                        <SelectItem value="17:30">17:30</SelectItem>
+                                        <SelectItem value="18:00">18:00</SelectItem>
+                                        <SelectItem value="18:30">18:30</SelectItem>
+                                        <SelectItem value="19:00">19:00</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex items-center space-x-2 py-2">
+                                <Checkbox
+                                    id="detail-snack"
+                                    checked={selectedRes.hasSnack}
+                                    onCheckedChange={(v) => setSelectedRes({ ...selectedRes, hasSnack: !!v })}
+                                />
+                                <label htmlFor="detail-snack" className="text-sm font-bold leading-none cursor-pointer">おやつ (100円)</label>
+                            </div>
+
+                            <div className="flex justify-between items-center border-t pt-2">
+                                <span className="text-muted-foreground text-sm">状態</span>
+                                <Badge variant="outline" className={selectedRes.status === "confirmed" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"}>
+                                    {selectedRes.status === "confirmed" ? "確定済" : "承認待ち"}
+                                </Badge>
+                            </div>
                         </div>
                     )}
-                    <DialogFooter className="flex-col gap-2">
+                    <DialogFooter className="flex-col gap-2 sm:flex-col">
+                        <Button
+                            className="w-full bg-blue-600 hover:bg-blue-700"
+                            onClick={() => handleUpdateReservation({ time: selectedRes?.time, hasSnack: selectedRes?.hasSnack })}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? "更新中..." : "内容を更新する"}
+                        </Button>
                         <Button variant="destructive" className="w-full" onClick={handleCancelRes}>予約を取り消す</Button>
                         <Button variant="outline" className="w-full" onClick={() => setIsResDetailOpen(false)}>閉じる</Button>
                     </DialogFooter>

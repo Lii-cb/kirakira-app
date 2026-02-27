@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { DailyAttendanceList } from "@/components/admin/daily-attendance-list";
 import { seedChildren, ensureAttendanceRecords, getChildren } from "@/lib/firestore";
+import { formatDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default function AdminDashboardPage() {
         if (confirm("初期データを投入しますか？")) {
             await seedChildren();
             const children = await getChildren();
-            const today = new Date().toISOString().split('T')[0];
+            const today = formatDate();
             await ensureAttendanceRecords(today, children);
             alert("完了しました。リロードしてください。");
         }

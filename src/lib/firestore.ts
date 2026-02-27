@@ -452,8 +452,10 @@ export const registerStaffShifts = async (name: string, dates: Date[], shiftTime
 // --- Payments ---
 
 
+import { formatDate } from "./date";
+
 export const addPaymentRequest = async (childId: string, amount: number) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatDate();
     await addDoc(collection(db, "payments"), {
         childId,
         amount,

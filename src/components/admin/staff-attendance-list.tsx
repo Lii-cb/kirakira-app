@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, UserMinus, User, Clock, Coffee, LogOut, CalendarIcon, Edit2, Users } from "lucide-react";
 import { Staff, StaffState, subscribeStaffAttendance, updateStaffStatus, addStaffMember, removeStaffMember, registerStaffShifts, getStaffList, getStaffMemo, updateStaffMemo } from "@/lib/firestore";
+import { formatDate } from "@/lib/date";
 // ... imports ...
 
 
@@ -67,13 +68,13 @@ export function StaffAttendanceList() {
             setMasterStaffList(list.filter(s => s.isActive));
 
             // Load Memo
-            const today = new Date().toISOString().split('T')[0];
+            const today = formatDate();
             const memo = await getStaffMemo(today);
             setDailyMemo(memo);
         };
         loadMaster();
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         const unsubscribe = subscribeStaffAttendance(today, (data) => {
             const sorted = [...data].sort((a, b) => {
                 const order = { work: 1, temp_out: 2, absent: 3, left: 4, planned: 5 };
@@ -87,7 +88,7 @@ export function StaffAttendanceList() {
     }, []);
 
     const handleSaveMemo = async (content: string) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await updateStaffMemo(today, content);
         alert("日報メモを保存しました。");
     };
@@ -97,27 +98,27 @@ export function StaffAttendanceList() {
         const staff = masterStaffList.find(s => s.id === selectedStaffId);
         if (!staff) return;
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await addStaffMember(today, staff.name, staff.id);
         setSelectedStaffId("");
         setIsAdding(false);
     };
 
     const handleStatusChange = async (staff: StaffState, status: StaffState['status']) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         const time = (status === 'work' || status === 'left') ? formatTime(new Date()) : staff.time;
         await updateStaffStatus(today, { ...staff, status, time });
     };
 
     const handleTimeSave = async (staff: StaffState) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await updateStaffStatus(today, { ...staff, time: editTimeValue });
         setEditTimeId(null);
     };
 
     const handleRemove = async (id: string) => {
         if (!confirm("職員リストから削除しますか？")) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await removeStaffMember(today, id);
     }
 

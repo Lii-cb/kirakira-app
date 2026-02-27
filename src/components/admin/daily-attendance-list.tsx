@@ -32,8 +32,8 @@ import { CalendarIcon } from "lucide-react";
 import { useAdminMode } from "@/contexts/admin-mode-context";
 import { Textarea } from "@/components/ui/textarea";
 
-// Import the memoized Row component
 import { AttendanceRow } from "@/components/admin/attendance-row";
+import { formatDate } from "@/lib/date";
 
 // Helpers
 const generateTimeOptions = () => {
@@ -103,7 +103,7 @@ export function DailyAttendanceList() {
     useEffect(() => {
         const syncData = async () => {
             try {
-                const dateStr = currentDate.toISOString().split('T')[0];
+                const dateStr = formatDate(currentDate);
                 const masterData = await getChildren();
                 const { ensureAttendanceRecords } = await import("@/lib/firestore");
                 await ensureAttendanceRecords(dateStr, masterData);
@@ -116,7 +116,7 @@ export function DailyAttendanceList() {
 
     // Initial Data Fetch & Subscription
     useEffect(() => {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = formatDate(currentDate);
         const unsubscribe = subscribeTodayAttendance(dateStr, (data) => {
             setChildren(data);
             // Update selected child if open
@@ -130,7 +130,7 @@ export function DailyAttendanceList() {
 
     const handleSendMessage = async () => {
         if (!selectedChild || !inputMessage.trim()) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
 
         const newMessage: Message = {
             id: `msg-${Date.now()}`,
@@ -149,7 +149,7 @@ export function DailyAttendanceList() {
 
     const handleSaveMemo = async () => {
         if (!selectedChild) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await updateAttendanceStatus(selectedChild.childId, today, {
             staffMemo: memoInput
         });
@@ -177,7 +177,7 @@ export function DailyAttendanceList() {
         // For now, simple useCallback with [children] dependency is standard.
         // It won't be perfectly stable (updates on any data change), but stable on Search/Sort changes.
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         // We need to find the child in the current 'children' state
         // We cannot use 'children' from closure if we want stability unless we put it in deps.
         // If we put in deps, it changes every time data changes.
@@ -194,7 +194,7 @@ export function DailyAttendanceList() {
     }, [children]);
 
     const handleCheckOut = useCallback(async (id: string) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         const childRecord = children.find(c => c.id === id);
         if (!childRecord) return;
 
@@ -205,7 +205,7 @@ export function DailyAttendanceList() {
     }, [children]);
 
     const handleTimeChange = useCallback(async (id: string, field: 'arrivalTime' | 'departureTime', value: string) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         const childRecord = children.find(c => c.id === id);
         if (!childRecord) return;
 
@@ -220,7 +220,7 @@ export function DailyAttendanceList() {
 
     const handleApproveRequest = async (child: AttendanceRecord) => {
         if (!child.changeRequest) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         const req = child.changeRequest;
 
         const updates: Partial<AttendanceRecord> = {
@@ -244,7 +244,7 @@ export function DailyAttendanceList() {
 
     const handleRejectRequest = async (child: AttendanceRecord) => {
         if (!child.changeRequest) return;
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatDate();
         await updateAttendanceStatus(child.childId, today, {
             changeRequest: { ...child.changeRequest, status: "rejected" }
         });
@@ -278,7 +278,7 @@ export function DailyAttendanceList() {
 
     // ... useEffect ...
     useEffect(() => {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = formatDate(currentDate);
         const unsubscribeStaff = subscribeStaffAttendance(dateStr, (data) => {
             setStaffAttendance(data);
         });
@@ -367,7 +367,7 @@ export function DailyAttendanceList() {
                                     selected={currentDate}
                                     onSelect={(date) => {
                                         if (date) {
-                                            const dateStr = date.toISOString().split('T')[0];
+                                            const dateStr = formatDate(date);
                                             router.push(`?date=${dateStr}`, { scroll: false });
                                             setCurrentDate(date);
                                             setIsCalendarOpen(false);
@@ -483,7 +483,7 @@ export function DailyAttendanceList() {
                         <TableBody>
                             {filteredChildren.map((child) => {
                                 // Calculate isLate
-                                const isToday = currentDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                                const isToday = formatDate(currentDate) === formatDate();
                                 let isLate = false;
                                 if (isToday && child.status === "pending") {
                                     const startTimeStr = child.reservationTime.split("-")[0];

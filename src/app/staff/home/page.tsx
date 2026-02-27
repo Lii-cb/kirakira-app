@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ja } from "date-fns/locale";
 import { APP_VERSION } from "@/lib/constants";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDate } from "@/lib/date";
 
 function StaffHomeContent() {
     const [staffInfo, setStaffInfo] = useState<StaffUser | null>(null);
@@ -34,7 +35,7 @@ function StaffHomeContent() {
     const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
     const router = useRouter();
 
-    const todayStr = useMemo(() => new Date().toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-'), []);
+    const todayStr = useMemo(() => formatDate(), []);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {

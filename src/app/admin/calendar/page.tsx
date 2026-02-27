@@ -10,6 +10,7 @@ import { getReservations, updateReservationStatus, getChildren, submitReservatio
 import { Reservation, Child, StaffState } from "@/types/firestore";
 import { ja } from "date-fns/locale";
 import { Spinner } from "@/components/ui/spinner";
+import { formatDate } from "@/lib/date";
 import {
     Dialog,
     DialogContent,
@@ -53,7 +54,7 @@ export default function AdminCalendarPage() {
         fetchChildren();
     }, []);
 
-    const dateStr = React.useMemo(() => date ? date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-') : "", [date]);
+    const dateStr = React.useMemo(() => date ? formatDate(date) : "", [date]);
 
     // Subscriptions
     React.useEffect(() => {
