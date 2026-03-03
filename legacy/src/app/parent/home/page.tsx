@@ -375,12 +375,18 @@ function ParentHomeContent() {
         closed: (date: Date) => date.getDay() === 0,
         confirmed: (date: Date) => {
             const dateStr = formatDate(date);
+            if (activeChildId) {
+                return allReservations[activeChildId]?.some(r => r.date === dateStr && r.status === "confirmed") ?? false;
+            }
             return childrenData.some(child =>
                 allReservations[child.id]?.some(r => r.date === dateStr && r.status === "confirmed")
             );
         },
         pending: (date: Date) => {
             const dateStr = formatDate(date);
+            if (activeChildId) {
+                return allReservations[activeChildId]?.some(r => r.date === dateStr && r.status === "pending") ?? false;
+            }
             return childrenData.some(child =>
                 allReservations[child.id]?.some(r => r.date === dateStr && r.status === "pending")
             );
@@ -394,6 +400,17 @@ function ParentHomeContent() {
         pending: { backgroundColor: '#dbeafe', color: '#1d4ed8' }, // Blue
         event: { border: '2px solid #000', borderRadius: '4px' } // Boxed
     };
+
+    // Upcoming reservations for the active child
+    const upcomingReservations = useMemo(() => {
+        const todayStr = formatDate();
+        const childId = activeChildId;
+        if (!childId || !allReservations[childId]) return [];
+        return allReservations[childId]
+            .filter(r => r.date >= todayStr)
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 10);
+    }, [activeChildId, allReservations]);
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20">

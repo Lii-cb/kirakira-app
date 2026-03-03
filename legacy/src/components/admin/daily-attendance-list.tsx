@@ -87,7 +87,7 @@ export function DailyAttendanceList() {
     // Sort Conf (Default to Status ASC)
     const [sortConfig, setSortConfig] = useState<{ key: keyof AttendanceRecord; direction: 'asc' | 'desc' }>({ key: 'status', direction: 'asc' });
 
-    const { sendCall } = useStaffNotifications();
+    const { sendCall, notifications, cancelCall } = useStaffNotifications();
     const { mode } = useAdminMode();
 
     // Fetch Master Data
@@ -202,7 +202,13 @@ export function DailyAttendanceList() {
             status: "left",
             departureTime: getRoundedDepartureTime()
         });
-    }, [children]);
+
+        // Dismiss any active pickup notification for this child
+        const activeNotif = notifications.find(n => n.childId === childRecord.childId);
+        if (activeNotif) {
+            await cancelCall(activeNotif.id);
+        }
+    }, [children, notifications, cancelCall]);
 
     const handleTimeChange = useCallback(async (id: string, field: 'arrivalTime' | 'departureTime', value: string) => {
         const today = formatDate();
@@ -252,12 +258,13 @@ export function DailyAttendanceList() {
     };
 
     const getReturnMethodIcon = (method: string) => {
-        // ... kept inside for Dialog usage, or could be extracted
-        return null; // The Dialog uses icon components directly, let's keep it simple or duplicate logic if needed. 
-        // Actually the Dialog code below re-implements it or uses it?
-        // Ah, the Dialog code used 'getReturnMethodIcon' which was defined inside component.
-        // Since I removed it from the helper section in my thought process, I need to put it back or import it.
-        // It's small, let's put it back to avoid errors.
+        switch (method) {
+            case "お迎え": return "🚗";
+            case "集団下校": return "👥";
+            case "バス": return "🚌";
+            case "一人帰り": return "🚶";
+            default: return "❓";
+        }
     };
 
     // Helper for Dialog (duplicated from Row for now to save time, or export from Row)

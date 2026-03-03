@@ -1,6 +1,6 @@
 // Shared application constants
 
-export const APP_VERSION = "Ver 2.2.3";
+export const APP_VERSION = "Ver 2.2.4";
 
 // Color themes for sibling cards (used in parent home + reserve pages)
 export const SIBLING_COLORS = [

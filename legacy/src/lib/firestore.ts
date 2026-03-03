@@ -178,7 +178,7 @@ export const addChild = async (childData: Partial<Child>) => {
 
 export const submitReservations = async (childId: string, dates: Date[], time: string, options?: { fee: number, hasSnack: boolean }) => {
     const promises = dates.map(date => {
-        const dateStr = date.toLocaleDateString("ja-JP", { year: 'numeric', month: '2-digit', day: '2-digit' }).replaceAll('/', '-');
+        const dateStr = formatDate(date);
         return addDoc(collection(db, "reservations"), {
             childId,
             date: dateStr,

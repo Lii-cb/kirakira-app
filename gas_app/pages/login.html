@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>きらきらマネージャー (Ver 3.1.0)</title>
+    <?!= include('pages/style'); ?>
+  </head>
+  <body>
+    
+    <div id="global-loader">
+      <div class="text-center">
+        <div class="spinner mb-4"></div>
+        <div class="text-muted" id="loader-text">ユーザー情報を確認中...</div>
+      </div>
+    </div>
+
+    <!-- Login fallback UI. In reality, routing is automatic based on getCurrentUser -->
+    <div class="container hidden" id="login-ui" style="max-width: 400px; margin-top: 10vh;">
+      <div class="card text-center">
+        <h1 style="color: var(--primary-text); font-size: 1.5rem; margin-bottom: 0.5rem;">
+          きらきらマネージャー
+        </h1>
+        <p class="text-muted mb-4">Ver 3.1.0 (GAS版)</p>
+        
+        <div style="background: var(--bg-color); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+          <p class="text-muted">あなたのアカウント：</p>
+          <p class="font-bold" id="user-email">...</p>
+        </div>
+
+        <p class="text-muted" id="login-error" style="color: #b91c1c;"></p>
+        
+        <div class="mt-4">
+          <p class="text-muted" style="font-size: 12px;">※Googleアカウントで自動認証されます。<br>権限がない場合は管理者に連絡してください。</p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Automatically run on load
+      window.onload = function() {
+        console.log("Checking user...");
+        google.script.run
+          .withSuccessHandler(function(user) {
+            console.log("User:", user);
+            document.getElementById('user-email').innerText = user.email;
+            
+            // Routing
+            var scriptUrl = "<?= ScriptApp.getService().getUrl() ?>";
+            
+            if (user.role === 'admin' || user.role === 'staff') {
+              document.getElementById('loader-text').innerText = 'ダッシュボードへ移動中...';
+              window.top.location.href = scriptUrl + "?page=admin";
+            } else if (user.role === 'parent') {
+              document.getElementById('loader-text').innerText = '保護者ページへ移動中...';
+              window.top.location.href = scriptUrl + "?page=parent";
+            } else {
+              // Unauthorized
+              document.getElementById('global-loader').classList.add('hidden');
+              document.getElementById('login-ui').classList.remove('hidden');
+              document.getElementById('login-error').innerText = "未登録のユーザーです。アクセス権がありません。";
+            }
+          })
+          .withFailureHandler(function(err) {
+            console.error(err);
+            document.getElementById('global-loader').classList.add('hidden');
+            document.getElementById('login-ui').classList.remove('hidden');
+            document.getElementById('login-error').innerText = "通信エラーが発生しました。";
+          })
+          .getCurrentUser();
+      };
+    </script>
+  </body>
+</html>

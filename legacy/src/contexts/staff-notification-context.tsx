@@ -3,12 +3,16 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { StaffNotification } from "@/types/firestore";
 import { subscribeNotifications, sendPickupNotification, updateNotificationReply, completeNotification } from "@/lib/firestore";
+import { updateDoc, doc, arrayUnion } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
 
 interface StaffNotificationContextType {
     notifications: StaffNotification[];
     sendCall: (childId: string, childName: string) => Promise<void>;
     replyCall: (id: string, reply: string) => Promise<void>;
     completeCall: (id: string) => Promise<void>;
+    cancelCall: (id: string) => Promise<void>;
+    addAction: (id: string, type: string, staffName: string) => Promise<void>;
 }
 
 const StaffNotificationContext = createContext<StaffNotificationContextType | undefined>(undefined);
@@ -35,8 +39,25 @@ export function StaffNotificationProvider({ children }: { children: React.ReactN
         await completeNotification(id);
     };
 
+    const cancelCall = async (id: string) => {
+        await updateDoc(doc(db, "notifications", id), {
+            active: false,
+            status: "cancelled"
+        });
+    };
+
+    const addAction = async (id: string, type: string, staffName: string) => {
+        await updateDoc(doc(db, "notifications", id), {
+            actions: arrayUnion({
+                type,
+                staffName,
+                timestamp: new Date().toISOString()
+            })
+        });
+    };
+
     return (
-        <StaffNotificationContext.Provider value={{ notifications, sendCall, replyCall, completeCall }}>
+        <StaffNotificationContext.Provider value={{ notifications, sendCall, replyCall, completeCall, cancelCall, addAction }}>
             {children}
         </StaffNotificationContext.Provider>
     );
