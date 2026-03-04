@@ -1,23 +1,28 @@
+<? var _baseUrl = ScriptApp.getService().getUrl(); ?>
 <nav class="nav-bar">
     <div class="container d-flex justify-between align-center">
         <div class="nav-brand">きらきら🌟</div>
         <div class="nav-links d-flex gap-4">
             <? if (user.role === 'admin' || user.role === 'staff') { ?>
-            <a href="?page=admin"
-                class="nav-link <?= (urlParams.page === 'admin' || !urlParams.page) ? 'active' : '' ?>">📊 ダッシュボード</a>
-            <a href="?page=reservations" class="nav-link <?= urlParams.page === 'reservations' ? 'active' : '' ?>">📅
-                予約管理</a>
+            <a href="<?= _baseUrl ?>"
+                class="nav-link <?= (!urlParams.page || urlParams.page === 'admin') ? 'active' : '' ?>">📊 ダッシュボード</a>
+            <a href="<?= _baseUrl ?>?page=reservations"
+                class="nav-link <?= urlParams.page === 'reservations' ? 'active' : '' ?>">📅 予約</a>
             <? if (user.role === 'admin') { ?>
-            <a href="?page=children" class="nav-link <?= urlParams.page === 'children' ? 'active' : '' ?>">👦 児童管理</a>
-            <a href="?page=documents" class="nav-link <?= urlParams.page === 'documents' ? 'active' : '' ?>">📄 おたより</a>
-            <a href="?page=finance" class="nav-link <?= urlParams.page === 'finance' ? 'active' : '' ?>">💴 金銭管理</a>
-            <a href="?page=settings" class="nav-link <?= urlParams.page === 'settings' ? 'active' : '' ?>">⚙️ 設定</a>
+            <a href="<?= _baseUrl ?>?page=children"
+                class="nav-link <?= urlParams.page === 'children'  ? 'active' : '' ?>">👦 児童</a>
+            <a href="<?= _baseUrl ?>?page=documents"
+                class="nav-link <?= urlParams.page === 'documents' ? 'active' : '' ?>">📄 おたより</a>
+            <a href="<?= _baseUrl ?>?page=finance"
+                class="nav-link <?= urlParams.page === 'finance'   ? 'active' : '' ?>">💴 金銭</a>
+            <a href="<?= _baseUrl ?>?page=settings"
+                class="nav-link <?= urlParams.page === 'settings'  ? 'active' : '' ?>">⚙️ 設定</a>
             <? } ?>
             <? } ?>
             <? if (user.role === 'parent') { ?>
-            <a href="?page=parent" class="nav-link <?= urlParams.page === 'parent' ? 'active' : '' ?>">🏠 ホーム</a>
+            <a href="<?= _baseUrl ?>?page=parent" class="nav-link <?= urlParams.page === 'parent' ? 'active' : '' ?>">🏠
+                ホーム</a>
             <? } ?>
-            <a href="<?= ScriptApp.getService().getUrl() ?>" class="nav-link text-muted" title="最初に戻る">🔄</a>
         </div>
     </div>
 </nav>
@@ -55,13 +60,13 @@
     }
 
     .nav-link.active {
-        color: var(--primary-text);
-        background: var(--primary-color);
+        color: white;
+        background: var(--primary-text);
     }
 
     @media (max-width: 600px) {
         .nav-links {
-            gap: 0.25rem;
+            gap: 0.2rem;
             overflow-x: auto;
         }
 
