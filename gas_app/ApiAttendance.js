@@ -65,16 +65,23 @@ function getAttendanceList(dateStr) {
         }
     }
 
-    // Create records for children who don't have one today yet
+    // Get reservations for the date
+    var reservations = getReservations(dateStr);
+    var reservationMap = {};
+    for (var k = 0; k < reservations.length; k++) {
+        reservationMap[reservations[k].childId] = reservations[k];
+    }
+
+    // Create records for children who have an attendance record OR a reservation
     for (var cid in childrenMap) {
         if (recordsForDate[cid]) {
             result.push(recordsForDate[cid]);
-        } else {
-            // Create a default "Pending" structural object
-            // (We don't actually write to the spreadsheet until an update happens to save API calls)
+        } else if (reservationMap[cid]) {
+            // Include child if they have a reservation today
             var child = childrenMap[cid];
+            var res = reservationMap[cid];
             result.push({
-                rowIdx: -1, // Indicates it's not saved yet
+                rowIdx: -1, // Indicates it's not saved to attendance sheet yet
                 id: cid + '_' + dateStr,
                 childId: cid,
                 date: dateStr,
@@ -83,8 +90,8 @@ function getAttendanceList(dateStr) {
                 status: '予定',
                 arrivalTime: null,
                 departureTime: null,
-                reservationTime: '未予約',
-                hasSnack: child.hasSnack,
+                reservationTime: res.time || '未定',
+                hasSnack: res.hasSnack !== undefined ? res.hasSnack : child.hasSnack,
                 returnMethod: child.defaultReturnMethod || '未定',
                 returnDetails: '',
                 staffMemo: '',
@@ -95,7 +102,6 @@ function getAttendanceList(dateStr) {
         }
     }
 
-    // Sort: typically by Grade then Name (but let's just return what we have, frontend can sort)
     return result;
 }
 

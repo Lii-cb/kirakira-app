@@ -1,5 +1,5 @@
 // ==========================================
-// KiraKira Manager - GAS Backend (Ver 3.1.0)
+// KiraKira Manager - GAS Backend (Ver 3.1.1)
 // ==========================================
 
 // --- Configuration ---
