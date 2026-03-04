@@ -1,5 +1,5 @@
 // ==========================================
-// KiraKira Manager - GAS Backend (Ver 3.1.3)
+// KiraKira Manager - GAS Backend (Ver 3.1.4)
 // ==========================================
 
 // --- Configuration ---
@@ -46,8 +46,8 @@ function doGet(e) {
 var _includeCache = {};
 
 // --- Includes ---
-function include(filename) {
-    if (_includeCache[filename]) return _includeCache[filename];
+function include(filename, data) {
+    if (_includeCache[filename] && !data) return _includeCache[filename];
 
     // For style pages, we don't need scriptlet evaluation
     if (filename.indexOf('style') !== -1) {
@@ -58,8 +58,14 @@ function include(filename) {
         } catch (e) { /* fallback to template below */ }
     }
 
-    var content = createTemplate(filename).evaluate().getContent();
-    _includeCache[filename] = content;
+    var template = createTemplate(filename);
+    if (data) {
+        for (var key in data) {
+            template[key] = data[key];
+        }
+    }
+    var content = template.evaluate().getContent();
+    if (!data) _includeCache[filename] = content;
     return content;
 }
 
