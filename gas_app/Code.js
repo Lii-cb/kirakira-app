@@ -31,7 +31,20 @@ function doGet(e) {
 
 // --- Includes ---
 function include(filename) {
-    return HtmlService.createHtmlOutputFromFile(filename).getContent();
+    try {
+        return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
+    } catch (e) {
+        // Fallback: if 'pages/xyz' fails, try 'xyz'
+        if (filename.indexOf('/') !== -1) {
+            var flatName = filename.split('/').pop();
+            try {
+                return HtmlService.createTemplateFromFile(flatName).evaluate().getContent();
+            } catch (e2) {
+                throw new Error("File not found: " + filename + " (Tried: " + filename + ", " + flatName + ")");
+            }
+        }
+        throw e;
+    }
 }
 
 // ==========================================
