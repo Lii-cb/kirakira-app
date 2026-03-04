@@ -8,409 +8,608 @@
     <title>保護者ページ - きらきらマネージャー</title>
     <?!= include('pages/style'); ?>
     <style>
-        /* Custom Calendar Styles */
+        .tab-btn {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border: none;
+            background: none;
+            font-size: 0.875rem;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .tab-btn.active {
+            border-bottom-color: var(--primary-text);
+            color: var(--primary-text);
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .status-arrived {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-left {
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .status-absent {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .calendar {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 4px;
-            margin-top: 1rem;
+            gap: 3px;
+            margin-top: 0.5rem;
         }
 
         .cal-header {
             text-align: center;
-            font-weight: bold;
+            font-size: 0.7rem;
+            font-weight: 600;
             color: var(--text-muted);
-            font-size: 0.75rem;
+            padding: 4px 0;
         }
 
         .cal-day {
-            min-height: 60px;
+            min-height: 52px;
             padding: 4px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            position: relative;
             cursor: pointer;
             display: flex;
             flex-direction: column;
             align-items: center;
+            font-size: 0.8rem;
+            position: relative;
         }
 
         .cal-day.other-month {
             opacity: 0.3;
-            background: #f8fafc;
             pointer-events: none;
+            background: #f8fafc;
         }
 
         .cal-day.disabled {
-            opacity: 0.5;
-            background: #f8fafc;
+            opacity: 0.45;
             cursor: not-allowed;
+            background: #f8fafc;
         }
 
         .cal-day.selected {
             border-color: var(--primary-text);
-            box-shadow: 0 0 0 2px rgba(219, 39, 119, 0.2);
             background: #fdf2f8;
-        }
-
-        .cal-day .date-num {
-            font-size: 0.875rem;
-            font-weight: 500;
+            box-shadow: 0 0 0 2px rgba(219, 39, 119, 0.2);
         }
 
         .cal-day.sunday .date-num {
             color: #dc2626;
         }
 
-        /* Reservation Indicators */
-        .indicator-dot {
-            width: 8px;
-            height: 8px;
+        .cal-day.saturday .date-num {
+            color: #2563eb;
+        }
+
+        .ind {
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
-            margin-top: 4px;
+            margin-top: 3px;
         }
 
         .ind-pending {
             background: #3b82f6;
         }
 
-        /* blue */
         .ind-confirmed {
             background: #22c55e;
         }
 
-        /* green */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 1rem;
+        }
+
+        .modal-box {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 380px;
+        }
     </style>
 </head>
 
 <body>
     <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
 
-    <!-- Spinner -->
-    <div id="global-spinner" class="container text-center mt-4">
-        <div class="spinner"></div>
-        <p class="text-muted">読み込み中...</p>
+    <div class="container mt-2">
+        <!-- Tabs -->
+        <div class="d-flex" style="border-bottom:1px solid var(--border-color); margin-bottom:1rem;">
+            <button class="tab-btn active" onclick="switchTab('home', this)">🏠 ホーム</button>
+            <button class="tab-btn" onclick="switchTab('reserve', this)">📅 予約</button>
+            <button class="tab-btn" onclick="switchTab('payment', this)">💴 入金</button>
+            <button class="tab-btn" onclick="switchTab('docs', this)">📄 おたより</button>
+        </div>
+
+        <!-- HOME TAB -->
+        <div id="tab-home">
+            <div class="mb-4">
+                <label class="font-bold d-block mb-2">対象の児童</label>
+                <select id="child-selector" onchange="handleChildChange()" style="max-width:200px;"></select>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card mb-4" id="status-card">
+                <div class="d-flex justify-between align-center mb-2">
+                    <div class="font-bold">本日のステータス</div>
+                    <div id="today-status-badge"></div>
+                </div>
+                <div class="d-flex gap-4" style="font-size:0.875rem;">
+                    <div><span class="text-muted">入室:</span> <span id="arrival-time" class="font-bold">-</span></div>
+                    <div><span class="text-muted">退室:</span> <span id="departure-time" class="font-bold">-</span></div>
+                    <div><span class="text-muted">帰宅:</span> <span id="return-method" class="font-bold">-</span></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex gap-4 mb-4" style="flex-wrap:wrap;">
+                <button class="btn-outline" style="flex:1; min-width:120px;" onclick="openAbsenceModal()">
+                    <div style="font-size:1.5rem;">🤒</div>欠席の連絡
+                </button>
+                <button class="btn-outline" style="flex:1; min-width:120px;" onclick="openReturnModal()">
+                    <div style="font-size:1.5rem;">🚌</div>帰宅方法変更
+                </button>
+            </div>
+        </div>
+
+        <!-- RESERVE TAB -->
+        <div id="tab-reserve" class="hidden">
+            <div class="mb-4">
+                <label class="font-bold d-block mb-2">対象の児童</label>
+                <select id="res-child-selector" onchange="handleResChildChange()" style="max-width:200px;"></select>
+            </div>
+            <div class="card">
+                <h2 style="font-size:1rem; margin-top:0;">予約カレンダー</h2>
+                <div class="d-flex justify-between align-center mb-2">
+                    <button class="btn-outline" onclick="changeMonth(-1)" style="padding:0.25rem 0.75rem;">◀</button>
+                    <div class="font-bold" id="cal-month-label"></div>
+                    <button class="btn-outline" onclick="changeMonth(1)" style="padding:0.25rem 0.75rem;">▶</button>
+                </div>
+                <div class="calendar" id="calendar"></div>
+
+                <div id="reservation-form" class="mt-4 hidden"
+                    style="border-top:1px solid var(--border-color); padding-top:1rem;">
+                    <div class="font-bold mb-2">選択日: <span id="selected-dates-label"></span></div>
+                    <label class="d-block mb-2">利用時間</label>
+                    <select id="res-time" class="mb-3">
+                        <option value="15:00-17:00">15:00 - 17:00（通常）</option>
+                        <option value="15:00-17:30">15:00 - 17:30</option>
+                        <option value="15:00-18:00">15:00 - 18:00</option>
+                        <option value="15:00-18:30">15:00 - 18:30</option>
+                        <option value="一日保育">一日保育（8:00-17:00）</option>
+                    </select>
+                    <label class="d-block mb-3"><input type="checkbox" id="res-snack"> おやつを希望する</label>
+                    <div class="text-muted mb-3" id="res-fee-estimate" style="font-size:0.875rem;"></div>
+                    <button class="btn-primary" style="width:100%;" onclick="submitReservation()">予約を送信</button>
+                </div>
+            </div>
+
+            <!-- Reservation History -->
+            <div class="card mt-4">
+                <h2 style="font-size:1rem; margin-top:0;">予約履歴</h2>
+                <div id="reservation-history">
+                    <p class="text-muted">読み込み中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAYMENT TAB -->
+        <div id="tab-payment" class="hidden">
+            <div class="mb-4">
+                <label class="font-bold d-block mb-2">対象の児童</label>
+                <select id="pay-child-selector" onchange="handlePayChildChange()" style="max-width:200px;"></select>
+            </div>
+            <div class="card mb-4">
+                <div class="d-flex justify-between align-center">
+                    <div>
+                        <div class="text-muted">利用料残高</div>
+                        <div class="font-bold" style="font-size:1.5rem; color:#b91c1c;" id="pay-balance">¥-</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-muted">累計請求</div>
+                        <div class="font-bold" id="pay-total">¥-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-4">
+                <h2 style="font-size:1rem; margin-top:0;">入金報告</h2>
+                <input type="number" id="pay-amount" placeholder="金額を入力（円）" class="mb-3" min="0">
+                <button class="btn-primary" style="width:100%;" onclick="submitPayment()">入金報告を送信</button>
+            </div>
+            <div class="card">
+                <h2 style="font-size:1rem; margin-top:0;">入金履歴</h2>
+                <div id="payment-history">
+                    <p class="text-muted">読み込み中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- DOCS TAB -->
+        <div id="tab-docs" class="hidden">
+            <div id="docs-list">
+                <p class="text-muted">読み込み中...</p>
+            </div>
+        </div>
     </div>
 
-    <div class="container hidden" id="main-content">
-
-        <!-- Child Selector -->
-        <div class="mb-4">
-            <label class="font-bold mb-2 d-block">児童の選択</label>
-            <select id="child-selector" onchange="handleChildChange()"></select>
-        </div>
-
-        <!-- Quick Status -->
-        <div class="card mb-4" id="child-status-card">
-            <div class="d-flex justify-between align-center">
-                <div>
-                    <div class="text-muted">本日のステータス</div>
-                    <div class="font-bold mt-2" style="font-size:1.25rem;" id="today-status">-</div>
-                </div>
-                <div class="text-right">
-                    <div class="text-muted">利用料残高</div>
-                    <div class="font-bold mt-2" style="font-size:1.25rem; color: #b91c1c;" id="fee-balance">¥0</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="d-flex gap-4 mb-4" style="flex-wrap: wrap;">
-            <button class="btn-outline" style="flex:1;" onclick="openAbsenceForm()">
-                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🤒</div>
-                欠席の連絡
-            </button>
-            <button class="btn-outline" style="flex:1;" onclick="openReturnMethodForm()">
-                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🚌</div>
-                帰宅方法の変更
-            </button>
-        </div>
-
-        <!-- Calendar Section -->
-        <div class="card">
-            <h2 style="font-size: 1.125rem; margin-top:0;">予約カレンダー</h2>
-            <div class="d-flex justify-between align-center mb-4">
-                <button class="btn-outline" onclick="changeMonth(-1)">◀ 先月</button>
-                <div class="font-bold" id="cal-month-display">2026年3月</div>
-                <button class="btn-outline" onclick="changeMonth(1)">翌月 ▶</button>
-            </div>
-
-            <div class="calendar" id="calendar">
-                <!-- Calendar injected here -->
-            </div>
-
-            <!-- Reservation Form (only shown if days selected) -->
-            <div id="reservation-form" class="mt-4 hidden"
-                style="border-top:1px solid var(--border-color); padding-top:1rem;">
-                <h3 style="font-size:1rem;">選択した日の予約 신청</h3>
-                <p class="text-muted" id="selected-dates-text"></p>
-
-                <label>利用時間</label>
-                <select id="res-time">
-                    <option value="14:00-17:00">14:00 - 17:00 (基本)</option>
-                    <option value="14:00-18:00">14:00 - 18:00</option>
-                    <option value="一日保育">一日保育 (8:00-17:00)</option>
-                </select>
-
-                <label>
-                    <input type="checkbox" id="res-snack"> おやつを希望する
-                </label>
-
-                <button class="btn-primary mt-4" style="width:100%;" onclick="submitReservation()">予約を送信</button>
+    <!-- Modal: 欠席連絡 -->
+    <div id="absence-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h2 style="font-size:1rem; margin-top:0;">欠席の連絡</h2>
+            <p class="text-muted" style="font-size:0.875rem;">本日（<span id="abs-date-label"></span>）の欠席連絡を送信します。</p>
+            <textarea id="abs-memo" rows="3" placeholder="理由・メモ（任意）" class="mb-4"></textarea>
+            <div class="d-flex gap-4">
+                <button class="btn-outline" style="flex:1;" onclick="closeModal('absence-modal')">キャンセル</button>
+                <button class="btn-primary" style="flex:1;" onclick="submitAbsence()">送信</button>
             </div>
         </div>
     </div>
 
-    <!-- Toast -->
+    <!-- Modal: 帰宅方法変更 -->
+    <div id="return-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h2 style="font-size:1rem; margin-top:0;">帰宅方法の変更</h2>
+            <p class="text-muted" style="font-size:0.875rem;">本日（<span id="ret-date-label"></span>）の帰宅方法を変更します。</p>
+            <div class="d-flex" style="flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
+                <label><input type="radio" name="return-method" value="お迎え"> 🚗 お迎え</label>
+                <label><input type="radio" name="return-method" value="集団下校"> 👥 集団下校</label>
+                <label><input type="radio" name="return-method" value="一人帰り"> 🚶 一人帰り</label>
+                <label><input type="radio" name="return-method" value="バス"> 🚌 バス</label>
+            </div>
+            <textarea id="ret-memo" rows="2" placeholder="メモ（任意）" class="mb-4"></textarea>
+            <div class="d-flex gap-4">
+                <button class="btn-outline" style="flex:1;" onclick="closeModal('return-modal')">キャンセル</button>
+                <button class="btn-primary" style="flex:1;" onclick="submitReturnChange()">送信</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <script>
-        let currentUser = <?!= JSON.stringify(user) ?>;
+        const currentUser = <?!= JSON.stringify(user) ?>;
         let childrenList = [];
         let activeChildId = null;
-        let reservations = [];
-
+        let resChildId = null;
+        let payChildId = null;
         let calDate = new Date();
         let selectedDates = new Set();
-        const TODAY_STR = new Date().toISOString().split('T')[0];
+        let reservations = [];
+        const TODAY = new Date();
+        const TODAY_STR = [TODAY.getFullYear(), String(TODAY.getMonth() + 1).padStart(2, '0'), String(TODAY.getDate()).padStart(2, '0')].join('-');
 
-        // Polyfill for frontend where Utilities not available
-        function toYMD(d) {
-            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-        }
-        const REAL_TODAY = new Date();
-        const REAL_TODAY_STR = toYMD(REAL_TODAY);
-
-        function showToast(message, isError = false) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast' + (isError ? ' error' : '');
-            toast.innerText = message;
-            container.appendChild(toast);
-            setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 500); }, 3000);
+        function showToast(msg, isError = false) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
         }
 
+        function switchTab(name, btn) {
+            ['home', 'reserve', 'payment', 'docs'].forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+            });
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.remove('hidden');
+            btn.classList.add('active');
+            if (name === 'reserve') loadReserveTab();
+            if (name === 'payment') loadPaymentTab();
+            if (name === 'docs') loadDocsTab();
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function openAbsenceModal() {
+            document.getElementById('abs-date-label').innerText = TODAY_STR;
+            document.getElementById('absence-modal').classList.remove('hidden');
+        }
+        function openReturnModal() {
+            document.getElementById('ret-date-label').innerText = TODAY_STR;
+            document.getElementById('return-modal').classList.remove('hidden');
+        }
+
+        // ---- INIT ----
         window.onload = function () {
-            // document.getElementById('user-greeting').innerText = currentUser.name + ' 様'; // Removed as it is now in navigation
-            loadChildren(currentUser.email);
-        };
-
-        function loadChildren(email) {
             google.script.run
                 .withSuccessHandler(function (kids) {
-                    childrenList = kids;
-                    if (kids.length === 0) {
-                        document.getElementById('global-spinner').innerHTML = "紐づく児童が見つかりません。管理者に連絡してください。";
-                        return;
+                    childrenList = kids || [];
+                    populateSelectors();
+                    if (childrenList.length > 0) {
+                        activeChildId = childrenList[0].id;
+                        resChildId = childrenList[0].id;
+                        payChildId = childrenList[0].id;
+                        loadHomeTab();
                     }
-
-                    const sel = document.getElementById('child-selector');
-                    kids.forEach(k => {
-                        const opt = document.createElement('option');
-                        opt.value = k.id;
-                        opt.innerText = k.name + ' (' + k.grade + ')';
-                        sel.appendChild(opt);
-                    });
-
-                    activeChildId = kids[0].id;
-                    document.getElementById('res-snack').checked = kids[0].hasSnack;
-
-                    document.getElementById('global-spinner').classList.add('hidden');
-                    document.getElementById('main-content').classList.remove('hidden');
-
-                    fetchChildData();
                 })
-                .getLinkedChildren(email);
+                .withFailureHandler(function (e) { showToast('データ取得エラー: ' + e.message, true); })
+                .getLinkedChildren(currentUser.email);
+        };
+
+        function populateSelectors() {
+            ['child-selector', 'res-child-selector', 'pay-child-selector'].forEach(selId => {
+                const sel = document.getElementById(selId);
+                sel.innerHTML = childrenList.map(c => `<option value="${c.id}">${c.name}（${c.grade}年）</option>`).join('');
+            });
         }
 
+        // ---- HOME TAB ----
         function handleChildChange() {
             activeChildId = document.getElementById('child-selector').value;
-            const kid = childrenList.find(c => c.id === activeChildId);
-            if (kid) document.getElementById('res-snack').checked = kid.hasSnack;
-
-            selectedDates.clear();
-            document.getElementById('reservation-form').classList.add('hidden');
-
-            fetchChildData();
+            loadHomeTab();
         }
 
-        function fetchChildData() {
-            // Parallel requests in GAS aren't native in JS client aside from multiple calls
-            // 1. Get reservations
+        function loadHomeTab() {
+            if (!activeChildId) return;
+            google.script.run
+                .withSuccessHandler(function (rec) {
+                    if (!rec) {
+                        document.getElementById('today-status-badge').innerHTML = '<span class="status-badge status-pending">未記録</span>';
+                        document.getElementById('arrival-time').innerText = '-';
+                        document.getElementById('departure-time').innerText = '-';
+                        document.getElementById('return-method').innerText = '-';
+                        return;
+                    }
+                    const statusMap = { '予定': 'pending', '入室': 'arrived', '退室': 'left', '欠席': 'absent' };
+                    const cls = statusMap[rec.status] || 'pending';
+                    document.getElementById('today-status-badge').innerHTML = `<span class="status-badge status-${cls}">${rec.status || '未記録'}</span>`;
+                    document.getElementById('arrival-time').innerText = rec.arrivalTime || '-';
+                    document.getElementById('departure-time').innerText = rec.departureTime || '-';
+                    document.getElementById('return-method').innerText = rec.returnMethod || '-';
+                })
+                .withFailureHandler(function (e) { showToast('ステータス取得エラー', true); })
+                .getAttendanceForChild(activeChildId, TODAY_STR);
+        }
+
+        function submitAbsence() {
+            const memo = document.getElementById('abs-memo').value;
+            document.getElementById('absence-modal').classList.add('hidden');
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '欠席連絡を送信しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadHomeTab();
+                })
+                .withFailureHandler(function (e) { showToast('送信エラー: ' + e.message, true); })
+                .submitChangeRequest(activeChildId, TODAY_STR, 'absence', '欠席', memo);
+        }
+
+        function submitReturnChange() {
+            const method = document.querySelector('input[name="return-method"]:checked');
+            if (!method) { showToast('帰宅方法を選択してください', true); return; }
+            const memo = document.getElementById('ret-memo').value;
+            document.getElementById('return-modal').classList.add('hidden');
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '帰宅方法変更を送信しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadHomeTab();
+                })
+                .withFailureHandler(function (e) { showToast('送信エラー: ' + e.message, true); })
+                .submitChangeRequest(activeChildId, TODAY_STR, 'returnMethod', method.value, memo);
+        }
+
+        // ---- RESERVE TAB ----
+        function handleResChildChange() {
+            resChildId = document.getElementById('res-child-selector').value;
+            loadReserveTab();
+        }
+
+        function loadReserveTab() {
+            if (!resChildId) return;
+            selectedDates.clear();
+            updateReservationForm();
+            renderCalendar();
             google.script.run
                 .withSuccessHandler(function (res) {
-                    reservations = res;
+                    reservations = res || [];
                     renderCalendar();
+                    renderReservationHistory();
                 })
-                .getReservationsForChild(activeChildId);
-
-            // 2. Get today's attendance status
-            google.script.run
-                .withSuccessHandler(function (list) {
-                    const me = list.find(l => l.childId === activeChildId);
-                    if (me) {
-                        document.getElementById('today-status').innerText = me.status;
-                    }
-                })
-                .getAttendanceList(REAL_TODAY_STR);
-
-            // 3. Get Billing Balance
-            google.script.run
-                .withSuccessHandler(function (fin) {
-                    document.getElementById('fee-balance').innerText = '¥' + fin.balance.toLocaleString();
-                })
-                .getChildBalance(activeChildId);
+                .withFailureHandler(function (e) { showToast('予約取得エラー', true); })
+                .getReservationsForChild(resChildId);
         }
 
-        // --- Calendar Logic ---
-        function changeMonth(offset) {
-            calDate.setMonth(calDate.getMonth() + offset);
+        function changeMonth(delta) {
+            calDate.setMonth(calDate.getMonth() + delta);
             selectedDates.clear();
             updateReservationForm();
             renderCalendar();
         }
 
         function renderCalendar() {
-            const year = calDate.getFullYear();
-            const month = calDate.getMonth();
-            document.getElementById('cal-month-display').innerText = `${year}年 ${month + 1}月`;
+            const y = calDate.getFullYear(), m = calDate.getMonth();
+            document.getElementById('cal-month-label').innerText = y + '年' + (m + 1) + '月';
+            const cal = document.getElementById('calendar');
+            cal.innerHTML = ['日', '月', '火', '水', '木', '金', '土'].map(d => `<div class="cal-header">${d}</div>`).join('');
+            const first = new Date(y, m, 1).getDay();
+            const days = new Date(y, m + 1, 0).getDate();
+            const reservedMap = {};
+            reservations.forEach(r => { reservedMap[r.date] = r.status; });
 
-            const calContainer = document.getElementById('calendar');
-            calContainer.innerHTML = '';
-
-            // Headers
-            const days = ['日', '月', '火', '水', '木', '金', '土'];
-            days.forEach(d => {
-                const div = document.createElement('div');
-                div.className = 'cal-header';
-                div.innerText = d;
-                calContainer.appendChild(div);
-            });
-
-            const firstDay = new Date(year, month, 1);
-            const lastDay = new Date(year, month + 1, 0);
-
-            // Pad beginning
-            for (let i = 0; i < firstDay.getDay(); i++) {
-                const div = document.createElement('div');
-                div.className = 'cal-day other-month';
-                calContainer.appendChild(div);
-            }
-
-            // Days
-            for (let date = 1; date <= lastDay.getDate(); date++) {
-                const dObj = new Date(year, month, date);
-                const dateStr = toYMD(dObj);
-
-                const div = document.createElement('div');
-                div.className = 'cal-day';
-                if (dObj.getDay() === 0) div.classList.add('sunday');
-
-                // Past dates are disabled
-                if (dObj < new Date(REAL_TODAY.getFullYear(), REAL_TODAY.getMonth(), REAL_TODAY.getDate())) {
-                    div.classList.add('disabled');
-                }
-
-                if (selectedDates.has(dateStr)) {
-                    div.classList.add('selected');
-                }
-
-                // Look for reservation
-                const res = reservations.find(r => r.date === dateStr);
-                let ind = '';
-                if (res) {
-                    if (res.status === 'confirmed') ind = '<div class="indicator-dot ind-confirmed" title="確定済"></div>';
-                    else if (res.status === 'pending') ind = '<div class="indicator-dot ind-pending" title="申請中"></div>';
-
-                    // if already reserved, disable click
-                    div.classList.add('disabled');
-                }
-
-                div.innerHTML = `<span class="date-num">${date}</span>${ind}`;
-
-                if (!div.classList.contains('disabled')) {
-                    div.onclick = () => toggleDateSelection(dateStr);
-                }
-
-                calContainer.appendChild(div);
+            for (let i = 0; i < first; i++) cal.innerHTML += '<div class="cal-day other-month"></div>';
+            for (let d = 1; d <= days; d++) {
+                const ds = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+                const dt = new Date(y, m, d);
+                const dow = dt.getDay();
+                const isPast = ds < TODAY_STR;
+                const isReserved = !!reservedMap[ds];
+                let cls = 'cal-day';
+                if (dow === 0) cls += ' sunday';
+                if (dow === 6) cls += ' saturday';
+                if (dow === 0 || isPast) cls += ' disabled';
+                if (selectedDates.has(ds)) cls += ' selected';
+                let indicator = '';
+                if (reservedMap[ds] === 'pending') indicator = '<div class="ind ind-pending"></div>';
+                else if (reservedMap[ds] === 'confirmed') indicator = '<div class="ind ind-confirmed"></div>';
+                const clickable = !isPast && dow !== 0 && !isReserved;
+                cal.innerHTML += `<div class="${cls}" ${clickable ? `onclick="toggleDate('${ds}')"` : ''}><span class="date-num">${d}</span>${indicator}</div>`;
             }
         }
 
-        function toggleDateSelection(dateStr) {
-            if (selectedDates.has(dateStr)) {
-                selectedDates.delete(dateStr);
-            } else {
-                selectedDates.add(dateStr);
-            }
+        function toggleDate(ds) {
+            if (selectedDates.has(ds)) selectedDates.delete(ds);
+            else selectedDates.add(ds);
             renderCalendar();
             updateReservationForm();
         }
 
         function updateReservationForm() {
             const form = document.getElementById('reservation-form');
-            if (selectedDates.size > 0) {
-                form.classList.remove('hidden');
-                const datesArr = Array.from(selectedDates).sort();
-                document.getElementById('selected-dates-text').innerText = datesArr.map(d => d.split('-').slice(1).join('/')).join(', ');
-            } else {
-                form.classList.add('hidden');
-            }
+            if (selectedDates.size === 0) { form.classList.add('hidden'); return; }
+            form.classList.remove('hidden');
+            const sorted = Array.from(selectedDates).sort();
+            document.getElementById('selected-dates-label').innerText = sorted.join('、');
+            const hasSnack = document.getElementById('res-snack').checked;
+            document.getElementById('res-fee-estimate').innerText = hasSnack ? `おやつ料金（見積）: ¥${100 * selectedDates.size}` : '';
         }
+
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.id === 'res-snack') updateReservationForm();
+        });
 
         function submitReservation() {
+            if (selectedDates.size === 0) { showToast('日付を選択してください', true); return; }
+            const dates = Array.from(selectedDates).sort();
             const time = document.getElementById('res-time').value;
             const hasSnack = document.getElementById('res-snack').checked;
-            const datesArr = Array.from(selectedDates);
-
-            if (datesArr.length === 0) return;
-
-            showToast('予約を送信しています...');
-
             google.script.run
-                .withSuccessHandler(function (res) {
-                    if (res.success) {
-                        showToast('予約リクエストを送信しました');
-                        selectedDates.clear();
-                        document.getElementById('reservation-form').classList.add('hidden');
-                        fetchChildData(); // reload reservations
-                    } else {
-                        showToast('エラー: ' + res.error, true);
-                    }
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '予約を送信しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) { selectedDates.clear(); loadReserveTab(); }
                 })
-                .withFailureHandler(function (e) { showToast('通信エラー', true); })
-                .submitReservation(activeChildId, datesArr, time, hasSnack);
+                .withFailureHandler(function (e) { showToast('送信エラー: ' + e.message, true); })
+                .submitReservation(resChildId, dates, time, hasSnack);
         }
 
-        function openAbsenceForm() {
-            const reason = prompt("本日の欠席理由を入力してください:");
-            if (reason !== null) {
-                google.script.run
-                    .withSuccessHandler(() => {
-                        showToast('欠席・変更を連絡しました');
-                        fetchChildData();
-                    })
-                    .updateAttendance(activeChildId, REAL_TODAY_STR, {
-                        status: '欠席',
-                        changeRequestType: 'absence',
-                        changeRequestValue: reason,
-                        changeRequestStatus: 'pending'
-                    });
-            }
+        function renderReservationHistory() {
+            const container = document.getElementById('reservation-history');
+            if (!reservations.length) { container.innerHTML = '<p class="text-muted">予約はありません</p>'; return; }
+            const statusLabel = { pending: '申請中', confirmed: '承認済', rejected: '却下', cancelled: '取消' };
+            const statusCls = { pending: 'status-pending', confirmed: 'status-arrived', rejected: 'status-absent', cancelled: 'status-left' };
+            container.innerHTML = reservations.slice(0, 20).map(r => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--border-color);">
+                    <div>
+                        <div class="font-bold" style="font-size:0.875rem;">${r.date}</div>
+                        <div class="text-muted" style="font-size:0.75rem;">${r.time || ''} ${r.hasSnack ? '🍰' : ''}</div>
+                    </div>
+                    <div class="d-flex align-center gap-2">
+                        <span class="status-badge ${statusCls[r.status] || 'status-pending'}">${statusLabel[r.status] || r.status}</span>
+                        ${r.status === 'pending' || r.status === 'confirmed' ? `<button onclick="cancelRes('${r.id}')" style="border:none; background:none; color:#b91c1c; cursor:pointer; font-size:0.75rem;">取消</button>` : ''}
+                    </div>
+                </div>`).join('');
         }
 
-        function openReturnMethodForm() {
-            const val = prompt("本日の帰宅方法・時間を入力してください:\n（例：16時にお迎え行きます）");
-            if (val !== null && val.trim() !== '') {
-                google.script.run
-                    .withSuccessHandler(() => {
-                        showToast('帰宅変更を連絡しました');
-                    })
-                    .updateAttendance(activeChildId, REAL_TODAY_STR, {
-                        changeRequestType: 'returnMethod',
-                        changeRequestValue: val,
-                        changeRequestStatus: 'pending'
-                    });
-            }
+        function cancelRes(id) {
+            if (!confirm('この予約を取り消しますか？')) return;
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '取り消しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadReserveTab();
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .cancelReservation(id);
+        }
+
+        // ---- PAYMENT TAB ----
+        function handlePayChildChange() {
+            payChildId = document.getElementById('pay-child-selector').value;
+            loadPaymentTab();
+        }
+
+        function loadPaymentTab() {
+            if (!payChildId) return;
+            google.script.run
+                .withSuccessHandler(function (b) {
+                    document.getElementById('pay-balance').innerText = '¥' + (b.balance || 0).toLocaleString();
+                    document.getElementById('pay-total').innerText = '¥' + (b.total || 0).toLocaleString();
+                })
+                .withFailureHandler(function () { })
+                .getChildBalance(payChildId);
+            google.script.run
+                .withSuccessHandler(renderPaymentHistory)
+                .withFailureHandler(function () { })
+                .getPaymentsForChild(payChildId);
+        }
+
+        function renderPaymentHistory(payments) {
+            const c = document.getElementById('payment-history');
+            if (!payments.length) { c.innerHTML = '<p class="text-muted">履歴はありません</p>'; return; }
+            c.innerHTML = payments.map(p => `
+                <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-color);">
+                    <div>
+                        <div class="font-bold" style="font-size:0.875rem;">¥${(p.amount || 0).toLocaleString()}</div>
+                        <div class="text-muted" style="font-size:0.75rem;">${p.reportedAt || ''}</div>
+                    </div>
+                    <span class="status-badge ${p.status === 'confirmed' ? 'status-arrived' : 'status-pending'}">${p.status === 'confirmed' ? '確認済' : '未確認'}</span>
+                </div>`).join('');
+        }
+
+        function submitPayment() {
+            const amount = parseInt(document.getElementById('pay-amount').value);
+            if (!amount || amount <= 0) { showToast('金額を正しく入力してください', true); return; }
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '入金報告を送信しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) { document.getElementById('pay-amount').value = ''; loadPaymentTab(); }
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .submitPaymentReport(payChildId, amount);
+        }
+
+        // ---- DOCS TAB ----
+        function loadDocsTab() {
+            google.script.run
+                .withSuccessHandler(function (docs) {
+                    const c = document.getElementById('docs-list');
+                    if (!docs.length) { c.innerHTML = '<p class="text-muted">おたよりはありません</p>'; return; }
+                    const catLabel = { news: 'お知らせ', event: 'イベント', other: 'その他' };
+                    c.innerHTML = docs.map(d => `
+                        <div class="card mb-2" style="padding:0.75rem;">
+                            <div class="d-flex justify-between align-center">
+                                <div>
+                                    <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-right:6px;">${catLabel[d.category] || d.category}</span>
+                                    <span class="font-bold">${d.title}</span>
+                                </div>
+                                <div class="text-muted" style="font-size:0.75rem;">${d.date ? d.date.substring(0, 10) : ''}</div>
+                            </div>
+                            ${d.url ? `<a href="${d.url}" target="_top" style="font-size:0.8rem; color:var(--primary-text);">🔗 リンクを開く</a>` : ''}
+                        </div>`).join('');
+                })
+                .withFailureHandler(function () { document.getElementById('docs-list').innerHTML = '<p class="text-muted">取得エラー</p>'; })
+                .getDocuments();
         }
     </script>
 </body>

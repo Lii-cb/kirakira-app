@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>予約管理 - きらきらマネージャー</title>
+    <?!= include('pages/style'); ?>
+</head>
+
+<body>
+    <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <div class="container mt-2">
+        <h1 style="font-size:1.25rem; color:var(--primary-text);">📅 予約管理</h1>
+
+        <!-- Date Selector -->
+        <div class="card mb-4">
+            <label class="font-bold d-block mb-2">日付を選択</label>
+            <input type="date" id="date-picker"
+                value="<?= Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd') ?>"
+                onchange="loadReservations()" style="max-width:200px;">
+        </div>
+
+        <!-- Reservations Table -->
+        <div class="card">
+            <div class="d-flex justify-between align-center mb-4">
+                <h2 style="font-size:1rem; margin:0;">予約一覧</h2>
+                <button class="btn-outline" onclick="bulkApprove()" style="font-size:0.8rem;">一括承認</button>
+            </div>
+            <div id="reservations-container">
+                <p class="text-muted">読み込み中...</p>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script>
+        let currentDate = document.getElementById('date-picker').value;
+        let reservationsData = [];
+
+        function showToast(msg, isError = false) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
+        }
+
+        function loadReservations() {
+            currentDate = document.getElementById('date-picker').value;
+            document.getElementById('reservations-container').innerHTML = '<p class="text-muted">読み込み中...</p>';
+            google.script.run
+                .withSuccessHandler(renderTable)
+                .withFailureHandler(function (e) { showToast('取得エラー: ' + e.message, true); })
+                .getReservations(currentDate);
+        }
+
+        function renderTable(data) {
+            reservationsData = data || [];
+            const c = document.getElementById('reservations-container');
+            if (!reservationsData.length) { c.innerHTML = '<p class="text-muted text-center">この日の予約はありません</p>'; return; }
+            const statusLabel = { pending: '申請中', confirmed: '承認済', rejected: '却下' };
+            const statusCls = { pending: '#3b82f6', confirmed: '#22c55e', rejected: '#ef4444' };
+            c.innerHTML = `<div style="overflow-x:auto;"><table>
+                <thead><tr><th>児童ID</th><th>時間帯</th><th>おやつ</th><th>ステータス</th><th>操作</th></tr></thead>
+                <tbody>${reservationsData.map(r => `<tr>
+                    <td>${r.childId}</td>
+                    <td>${r.time || '-'}</td>
+                    <td>${r.hasSnack ? '🍰' : '-'}</td>
+                    <td><span style="background:${statusCls[r.status] || '#94a3b8'}20; color:${statusCls[r.status] || '#94a3b8'}; padding:2px 8px; border-radius:999px; font-size:0.75rem; font-weight:600;">${statusLabel[r.status] || r.status}</span></td>
+                    <td class="d-flex gap-2" style="flex-wrap:nowrap;">
+                        ${r.status === 'pending' ? `
+                            <button onclick="updateStatus('${r.id}','confirmed')" style="border:none; background:#dcfce7; color:#166534; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.75rem;">承認</button>
+                            <button onclick="updateStatus('${r.id}','rejected')" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.75rem;">却下</button>
+                        ` : ''}
+                    </td>
+                </tr>`).join('')}</tbody>
+            </table></div>`;
+        }
+
+        function updateStatus(id, status) {
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '更新しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadReservations();
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .updateReservationStatus(id, status);
+        }
+
+        function bulkApprove() {
+            const ids = reservationsData.filter(r => r.status === 'pending').map(r => r.id);
+            if (!ids.length) { showToast('承認待ちの予約はありません'); return; }
+            if (!confirm(ids.length + '件を一括承認しますか？')) return;
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '一括承認しました' : 'エラー', !r.success);
+                    if (r.success) loadReservations();
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .bulkUpdateReservations(ids, 'confirmed');
+        }
+
+        window.onload = loadReservations;
+    </script>
+</body>
+
+</html>

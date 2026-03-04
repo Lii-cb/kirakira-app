@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>設定 - きらきらマネージャー</title>
+    <?!= include('pages/style'); ?>
+</head>
+
+<body>
+    <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <div class="container mt-2">
+        <h1 style="font-size:1.25rem; color:var(--primary-text);">⚙️ システム設定</h1>
+
+        <div class="card">
+            <h2 style="font-size:1rem; margin-top:0;">基本設定</h2>
+
+            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">施設名</label>
+            <input type="text" id="facility-name" placeholder="施設名" class="mb-4">
+
+            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">おやつ料金（円/日）</label>
+            <input type="number" id="snack-fee" placeholder="例: 100" class="mb-4" min="0">
+
+            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">Webhook URL（Google Chat）</label>
+            <input type="url" id="webhook-url" placeholder="https://chat.googleapis.com/..." class="mb-4">
+
+            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">管理者PIN（4桁以上の数字）</label>
+            <input type="number" id="admin-pin" placeholder="例: 2580" class="mb-4" min="1000">
+
+            <button class="btn-primary" onclick="saveSettings()" style="width:100%;">設定を保存</button>
+        </div>
+
+        <div class="card mt-4">
+            <h2 style="font-size:1rem; margin-top:0;">アプリ情報</h2>
+            <div style="font-size:0.875rem; line-height:2;">
+                <div><span class="text-muted">バージョン:</span> <strong>Ver
+                        <?= APP_VERSION ?>
+                    </strong></div>
+                <div><span class="text-muted">ログインユーザー:</span> <strong>
+                        <?= user.email ?>
+                    </strong></div>
+                <div><span class="text-muted">ロール:</span> <strong>
+                        <?= user.role ?>
+                    </strong></div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script>
+        function showToast(msg, isError = false) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
+        }
+
+        window.onload = function () {
+            google.script.run
+                .withSuccessHandler(function (s) {
+                    if (!s) return;
+                    document.getElementById('facility-name').value = s.facilityName || '';
+                    document.getElementById('snack-fee').value = s.snackFee || '';
+                    document.getElementById('webhook-url').value = s.webhookUrl || '';
+                    document.getElementById('admin-pin').value = s.adminPin || '';
+                })
+                .withFailureHandler(function () { })
+                .getSettings();
+        };
+
+        function saveSettings() {
+            const settings = {
+                facilityName: document.getElementById('facility-name').value,
+                snackFee: parseInt(document.getElementById('snack-fee').value) || 100,
+                webhookUrl: document.getElementById('webhook-url').value,
+                adminPin: document.getElementById('admin-pin').value
+            };
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '設定を保存しました ✅' : 'エラー: ' + r.error, !r.success);
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .saveSettings(settings);
+        }
+    </script>
+</body>
+
+</html>

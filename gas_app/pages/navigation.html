@@ -1,23 +1,23 @@
 <nav class="nav-bar">
     <div class="container d-flex justify-between align-center">
-        <div class="nav-brand">きらきらマネージャー</div>
+        <div class="nav-brand">きらきら🌟</div>
         <div class="nav-links d-flex gap-4">
             <? if (user.role === 'admin' || user.role === 'staff') { ?>
             <a href="?page=admin"
-                class="nav-link <?= (urlParams.page === 'admin' || !urlParams.page) ? 'active' : '' ?>">
-                <span>📊</span> ダッシュボード
-            </a>
+                class="nav-link <?= (urlParams.page === 'admin' || !urlParams.page) ? 'active' : '' ?>">📊 ダッシュボード</a>
+            <a href="?page=reservations" class="nav-link <?= urlParams.page === 'reservations' ? 'active' : '' ?>">📅
+                予約管理</a>
+            <? if (user.role === 'admin') { ?>
+            <a href="?page=children" class="nav-link <?= urlParams.page === 'children' ? 'active' : '' ?>">👦 児童管理</a>
+            <a href="?page=documents" class="nav-link <?= urlParams.page === 'documents' ? 'active' : '' ?>">📄 おたより</a>
+            <a href="?page=finance" class="nav-link <?= urlParams.page === 'finance' ? 'active' : '' ?>">💴 金銭管理</a>
+            <a href="?page=settings" class="nav-link <?= urlParams.page === 'settings' ? 'active' : '' ?>">⚙️ 設定</a>
             <? } ?>
-
-            <? if (user.role === 'admin' || user.role === 'staff' || user.role === 'parent') { ?>
-            <a href="?page=parent" class="nav-link <?= (urlParams.page === 'parent') ? 'active' : '' ?>">
-                <span>🏠</span> 保護者ページ
-            </a>
             <? } ?>
-
-            <a href="<?= ScriptApp.getService().getUrl() ?>" class="nav-link text-muted" title="初期表示へ戻る">
-                <span>🔄</span> 切り替え
-            </a>
+            <? if (user.role === 'parent') { ?>
+            <a href="?page=parent" class="nav-link <?= urlParams.page === 'parent' ? 'active' : '' ?>">🏠 ホーム</a>
+            <? } ?>
+            <a href="<?= ScriptApp.getService().getUrl() ?>" class="nav-link text-muted" title="最初に戻る">🔄</a>
         </div>
     </div>
 </nav>
@@ -42,14 +42,12 @@
     .nav-link {
         text-decoration: none;
         color: var(--text-color);
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         font-weight: 500;
-        padding: 0.5rem 0.75rem;
+        padding: 0.4rem 0.6rem;
         border-radius: 6px;
         transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+        white-space: nowrap;
     }
 
     .nav-link:hover {
@@ -61,19 +59,15 @@
         background: var(--primary-color);
     }
 
-    /* Mobile optimization */
     @media (max-width: 600px) {
         .nav-links {
-            gap: 0.5rem;
-        }
-
-        .nav-link span {
-            margin: 0;
+            gap: 0.25rem;
+            overflow-x: auto;
         }
 
         .nav-link {
-            font-size: 0.75rem;
-            padding: 0.4rem 0.5rem;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.4rem;
         }
 
         .nav-brand {

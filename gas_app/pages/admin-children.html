@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>児童管理 - きらきらマネージャー</title>
+    <?!= include('pages/style'); ?>
+</head>
+
+<body>
+    <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <div class="container mt-2">
+        <h1 style="font-size:1.25rem; color:var(--primary-text);">👦 児童管理</h1>
+
+        <div class="card">
+            <div class="d-flex justify-between align-center mb-4">
+                <h2 style="font-size:1rem; margin:0;">児童一覧</h2>
+                <div class="d-flex gap-2">
+                    <input type="text" id="search-input" placeholder="名前で検索" oninput="filterTable()"
+                        style="max-width:150px; padding:0.25rem 0.5rem; font-size:0.875rem;">
+                </div>
+            </div>
+            <div style="overflow-x:auto;">
+                <div id="children-container">
+                    <p class="text-muted">読み込み中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script>
+        let allChildren = [];
+
+        function showToast(msg, isError = false) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
+        }
+
+        window.onload = function () {
+            google.script.run
+                .withSuccessHandler(function (kids) {
+                    allChildren = kids || [];
+                    renderTable(allChildren);
+                })
+                .withFailureHandler(function (e) { showToast('取得エラー: ' + e.message, true); })
+                .getAllChildren();
+        };
+
+        function filterTable() {
+            const q = document.getElementById('search-input').value.toLowerCase();
+            renderTable(allChildren.filter(c => c.name.toLowerCase().includes(q) || (c.kana || '').toLowerCase().includes(q)));
+        }
+
+        function renderTable(kids) {
+            const c = document.getElementById('children-container');
+            if (!kids.length) { c.innerHTML = '<p class="text-muted">データがありません</p>'; return; }
+            c.innerHTML = `<table>
+                <thead><tr><th>ID</th><th>学年</th><th>氏名</th><th>フリガナ</th><th>帰宅方法</th><th>おやつ</th></tr></thead>
+                <tbody>${kids.map(k => `<tr>
+                    <td style="font-size:0.75rem; color:var(--text-muted);">${k.id}</td>
+                    <td>${k.grade}年</td>
+                    <td class="font-bold">${k.name}</td>
+                    <td style="font-size:0.8rem;">${k.kana || '-'}</td>
+                    <td style="font-size:0.8rem;">${k.returnMethod || '-'}</td>
+                    <td>
+                        <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                            <input type="checkbox" ${k.hasSnack ? 'checked' : ''} onchange="toggleSnack('${k.id}', this.checked)">
+                            <span style="font-size:0.8rem;">${k.hasSnack ? '要' : '不要'}</span>
+                        </label>
+                    </td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+        }
+
+        function toggleSnack(childId, hasSnack) {
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? `おやつ設定を${hasSnack ? '「要」' : '「不要」'}に変更しました` : 'エラー: ' + r.error, !r.success);
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .toggleChildSnack(childId, hasSnack);
+        }
+    </script>
+</body>
+
+</html>

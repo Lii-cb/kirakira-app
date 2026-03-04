@@ -195,3 +195,135 @@ function formatTime(val) {
     }
     return val.toString();
 }
+
+// ==========================================
+// 変更申請 (保護者からの欠席・帰宅変更)
+// ==========================================
+
+// 保護者が変更申請を送信する
+function submitChangeRequest(childId, dateStr, type, value, memo) {
+    var db = getDB();
+    var sheet = db.getSheetByName('出席記録');
+    var lock = LockService.getScriptLock();
+    if (!sheet) return { success: false, error: 'シートが見つかりません' };
+
+    try {
+        lock.waitLock(5000);
+        var data = sheet.getDataRange().getValues();
+        var targetId = childId + '_' + dateStr;
+        var rowIndex = -1;
+
+        for (var i = 1; i < data.length; i++) {
+            if (data[i][0] === targetId) {
+                rowIndex = i + 1;
+                break;
+            }
+        }
+
+        var changeType = type; // 'absence' or 'returnMethod'
+        var changeValue = value;
+        var changeMemo = memo || '';
+        var changeStatus = 'pending';
+
+        if (rowIndex === -1) {
+            // 出席レコードがない場合は作成
+            var childSheet = db.getSheetByName('児童マスタ');
+            var cData = childSheet.getDataRange().getValues();
+            var cName = '', cGrade = '', cReturn = '', cSnack = false;
+            for (var c = 1; c < cData.length; c++) {
+                if (cData[c][0].toString() === childId) {
+                    cName = cData[c][1]; cGrade = cData[c][3];
+                    cReturn = cData[c][4];
+                    cSnack = cData[c][5] === true || cData[c][5] === 'TRUE';
+                    break;
+                }
+            }
+            sheet.appendRow([
+                targetId, childId, dateStr, cName, cGrade,
+                type === 'absence' ? '欠席' : '予定', '', '', '', cSnack, cReturn,
+                changeMemo, '', changeType, changeValue + '|' + changeMemo, changeStatus
+            ]);
+        } else {
+            var rowRange = sheet.getRange(rowIndex, 1, 1, 16);
+            var rowVals = rowRange.getValues()[0];
+            if (type === 'absence') rowVals[5] = '欠席';
+            rowVals[13] = changeType;
+            rowVals[14] = changeValue + (changeMemo ? '|' + changeMemo : '');
+            rowVals[15] = changeStatus;
+            rowRange.setValues([rowVals]);
+        }
+        return { success: true };
+    } catch (e) {
+        console.error(e);
+        return { success: false, error: e.toString() };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+// 管理者が変更申請を承認・却下する
+function approveChangeRequest(childId, dateStr, approved) {
+    requireRole(['admin', 'staff']);
+    var db = getDB();
+    var sheet = db.getSheetByName('出席記録');
+    var lock = LockService.getScriptLock();
+
+    try {
+        lock.waitLock(5000);
+        var data = sheet.getDataRange().getValues();
+        var targetId = childId + '_' + dateStr;
+        for (var i = 1; i < data.length; i++) {
+            if (data[i][0] === targetId) {
+                var rowIndex = i + 1;
+                var rowRange = sheet.getRange(rowIndex, 1, 1, 16);
+                var rowVals = rowRange.getValues()[0];
+                rowVals[15] = approved ? 'approved' : 'rejected';
+                // 承認時は実際に変更を適用
+                if (approved) {
+                    var changeType = rowVals[13];
+                    var changeValFull = rowVals[14] ? rowVals[14].toString().split('|')[0] : '';
+                    if (changeType === 'returnMethod') rowVals[10] = changeValFull;
+                    if (changeType === 'absence') rowVals[5] = '欠席';
+                }
+                rowRange.setValues([rowVals]);
+                return { success: true };
+            }
+        }
+        return { success: false, error: 'レコードが見つかりません' };
+    } catch (e) {
+        console.error(e);
+        return { success: false, error: e.toString() };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+// 保護者用: 特定日の特定児童の出席情報を取得
+function getAttendanceForChild(childId, dateStr) {
+    var db = getDB();
+    var sheet = db.getSheetByName('出席記録');
+    if (!sheet) return null;
+
+    var data = sheet.getDataRange().getValues();
+    var targetId = childId + '_' + dateStr;
+    for (var i = 1; i < data.length; i++) {
+        if (data[i][0] === targetId) {
+            return {
+                id: data[i][0],
+                childId: data[i][1],
+                date: formatDateStr(data[i][2]),
+                status: data[i][5] || '未登録',
+                arrivalTime: data[i][6] ? formatTime(data[i][6]) : null,
+                departureTime: data[i][7] ? formatTime(data[i][7]) : null,
+                reservationTime: data[i][8],
+                hasSnack: data[i][9] === true || data[i][9] === 'TRUE',
+                returnMethod: data[i][10],
+                changeRequestType: data[i][13],
+                changeRequestValue: data[i][14],
+                changeRequestStatus: data[i][15]
+            };
+        }
+    }
+    return null; // レコードなし
+}
+

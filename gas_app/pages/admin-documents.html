@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>おたより管理 - きらきらマネージャー</title>
+    <?!= include('pages/style'); ?>
+</head>
+
+<body>
+    <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <div class="container mt-2">
+        <h1 style="font-size:1.25rem; color:var(--primary-text);">📄 おたより管理</h1>
+
+        <!-- Add Form -->
+        <div class="card mb-4">
+            <h2 style="font-size:1rem; margin-top:0;">新規追加</h2>
+            <input type="text" id="doc-title" placeholder="タイトル" class="mb-3">
+            <select id="doc-category" class="mb-3">
+                <option value="news">お知らせ</option>
+                <option value="event">イベント</option>
+                <option value="other">その他</option>
+            </select>
+            <input type="url" id="doc-url" placeholder="URL（外部リンク）" class="mb-3">
+            <button class="btn-primary" onclick="addDoc()" style="width:100%;">追加する</button>
+        </div>
+
+        <!-- List -->
+        <div class="card">
+            <h2 style="font-size:1rem; margin-top:0;">一覧</h2>
+            <div id="docs-list">
+                <p class="text-muted">読み込み中...</p>
+            </div>
+        </div>
+    </div>
+    <div id="toast-container"></div>
+
+    <script>
+        function showToast(msg, isError = false) {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (isError ? ' error' : '');
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
+        }
+
+        window.onload = loadDocs;
+
+        function loadDocs() {
+            google.script.run
+                .withSuccessHandler(renderDocs)
+                .withFailureHandler(function (e) { showToast('取得エラー: ' + e.message, true); })
+                .getDocuments();
+        }
+
+        function renderDocs(docs) {
+            const c = document.getElementById('docs-list');
+            if (!docs.length) { c.innerHTML = '<p class="text-muted">おたよりはありません</p>'; return; }
+            const catLabel = { news: 'お知らせ', event: 'イベント', other: 'その他' };
+            c.innerHTML = docs.map(d => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; border-bottom:1px solid var(--border-color);">
+                    <div>
+                        <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-right:6px; font-size:0.7rem;">${catLabel[d.category] || d.category}</span>
+                        <span class="font-bold">${d.title}</span>
+                        ${d.url ? `<br><a href="${d.url}" target="_top" style="font-size:0.75rem; color:var(--primary-text); text-decoration:none;">🔗 ${d.url.substring(0, 40)}...</a>` : ''}
+                    </div>
+                    <button onclick="deleteDoc('${d.id}')" style="border:none; background:#fee2e2; color:#991b1b; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.75rem; white-space:nowrap;">削除</button>
+                </div>`).join('');
+        }
+
+        function addDoc() {
+            const title = document.getElementById('doc-title').value.trim();
+            const category = document.getElementById('doc-category').value;
+            const url = document.getElementById('doc-url').value.trim();
+            if (!title) { showToast('タイトルを入力してください', true); return; }
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '追加しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) {
+                        document.getElementById('doc-title').value = '';
+                        document.getElementById('doc-url').value = '';
+                        loadDocs();
+                    }
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .addDocument(title, category, url);
+        }
+
+        function deleteDoc(id) {
+            if (!confirm('このおたよりを削除しますか？')) return;
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '削除しました' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadDocs();
+                })
+                .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
+                .deleteDocument(id);
+        }
+    </script>
+</body>
+
+</html>

@@ -43,11 +43,28 @@ function doGet(e) {
         }
     }
 
+    var adminPages = ['admin', 'finance', 'documents', 'children', 'settings', 'reservations'];
+    var isAdmin = (user.role === 'admin' || user.role === 'staff');
+
+    // Redirect unauthorized access
+    if (adminPages.indexOf(page) !== -1 && !isAdmin) page = 'login';
+    if (page === 'parent' && user.role === 'unknown') page = 'login';
+
     var template;
     if (page === 'admin') {
         template = createTemplate('pages/admin-dashboard');
     } else if (page === 'parent') {
         template = createTemplate('pages/parent-home');
+    } else if (page === 'finance') {
+        template = createTemplate('pages/admin-finance');
+    } else if (page === 'documents') {
+        template = createTemplate('pages/admin-documents');
+    } else if (page === 'children') {
+        template = createTemplate('pages/admin-children');
+    } else if (page === 'settings') {
+        template = createTemplate('pages/admin-settings');
+    } else if (page === 'reservations') {
+        template = createTemplate('pages/admin-reservations');
     } else {
         template = createTemplate('pages/login');
     }
@@ -60,6 +77,7 @@ function doGet(e) {
         .setTitle('きらきらマネージャー')
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
+
 
 // Global cache for include contents within one execution
 var _includeCache = {};
