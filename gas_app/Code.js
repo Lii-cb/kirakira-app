@@ -14,11 +14,11 @@ function doGet(e) {
     var template;
 
     if (page === 'admin') {
-        template = HtmlService.createTemplateFromFile('pages/admin-dashboard');
+        template = createTemplate('pages/admin-dashboard');
     } else if (page === 'parent') {
-        template = HtmlService.createTemplateFromFile('pages/parent-home');
+        template = createTemplate('pages/parent-home');
     } else {
-        template = HtmlService.createTemplateFromFile('pages/login');
+        template = createTemplate('pages/login');
     }
 
     // Pass URL parameters to the template if needed
@@ -31,16 +31,22 @@ function doGet(e) {
 
 // --- Includes ---
 function include(filename) {
+    return createTemplate(filename).evaluate().getContent();
+}
+
+// Helper for Robust Template Creation
+function createTemplate(filename) {
     try {
-        return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
+        return HtmlService.createTemplateFromFile(filename);
     } catch (e) {
         // Fallback: if 'pages/xyz' fails, try 'xyz'
         if (filename.indexOf('/') !== -1) {
             var flatName = filename.split('/').pop();
             try {
-                return HtmlService.createTemplateFromFile(flatName).evaluate().getContent();
+                return HtmlService.createTemplateFromFile(flatName);
             } catch (e2) {
-                throw new Error("File not found: " + filename + " (Tried: " + filename + ", " + flatName + ")");
+                // Return a descriptive error if both fail
+                throw new Error("HTMLファイルが見つかりません。ファイル名を確認してください: " + filename + " (" + flatName + ")");
             }
         }
         throw e;
