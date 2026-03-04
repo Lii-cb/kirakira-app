@@ -32,22 +32,27 @@ function doGet(e) {
     var user = getCurrentUser();
     var page = e.parameter.page;
 
-    // Server-side Routing logic
+    // Clear cache to avoid role mismatches
+    if (!page || page === 'admin') {
+        CacheService.getUserCache().remove("current_user_v2");
+        user = getCurrentUser(); // Re-fetch
+    }
+
+    // Default page logic based on role
     if (!page) {
-        if (user.role === 'admin' || user.role === 'staff') {
-            page = 'admin';
-        } else if (user.role === 'parent') {
-            page = 'parent';
-        } else {
-            page = 'login';
-        }
+        if (user.role === 'admin' || user.role === 'staff') page = 'admin';
+        else if (user.role === 'parent') page = 'parent';
+        else page = 'login';
     }
 
     var adminPages = ['admin', 'finance', 'documents', 'children', 'settings', 'reservations'];
     var isAdmin = (user.role === 'admin' || user.role === 'staff');
 
     // Redirect unauthorized access
-    if (adminPages.indexOf(page) !== -1 && !isAdmin) page = 'login';
+    if (adminPages.indexOf(page) !== -1 && !isAdmin) {
+        console.warn("Unauthorized access to " + page + " by " + user.email + " (role: " + user.role + ")");
+        page = 'login';
+    }
     if (page === 'parent' && user.role === 'unknown') page = 'login';
 
     var template;
@@ -73,9 +78,13 @@ function doGet(e) {
     template.user = user;
     template.urlParams = e.parameter;
 
-    return template.evaluate()
-        .setTitle('きらきらマネージャー')
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    try {
+        return template.evaluate()
+            .setTitle('きらきらマネージャー')
+            .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    } catch (err) {
+        return HtmlService.createHtmlOutput('<h1>ページ表示エラー</h1><p>' + err.toString() + '</p><p>Page: ' + page + '</p><p>Role: ' + user.role + '</p>');
+    }
 }
 
 
@@ -101,9 +110,14 @@ function include(filename, data) {
             template[key] = data[key];
         }
     }
-    var content = template.evaluate().getContent();
-    if (!data) _includeCache[filename] = content;
-    return content;
+    try {
+        var content = template.evaluate().getContent();
+        if (!data) _includeCache[filename] = content;
+        return content;
+    } catch (err) {
+        return '<div style="background:#fee2e2; border:1px solid #ef4444; padding:10px; color:#991b1b; margin:10px 0;">' +
+            '<strong>Include Error (' + filename + '):</strong> ' + err.toString() + '</div>';
+    }
 }
 
 // Helper for Robust Template Creation
