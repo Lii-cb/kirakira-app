@@ -1,0 +1,83 @@
+<nav class="nav-bar">
+    <div class="container d-flex justify-between align-center">
+        <div class="nav-brand">きらきらマネージャー</div>
+        <div class="nav-links d-flex gap-4">
+            <? if (user.role === 'admin' || user.role === 'staff') { ?>
+            <a href="?page=admin"
+                class="nav-link <?= (urlParams.page === 'admin' || !urlParams.page) ? 'active' : '' ?>">
+                <span>📊</span> ダッシュボード
+            </a>
+            <? } ?>
+
+            <? if (user.role === 'admin' || user.role === 'staff' || user.role === 'parent') { ?>
+            <a href="?page=parent" class="nav-link <?= (urlParams.page === 'parent') ? 'active' : '' ?>">
+                <span>🏠</span> 保護者ページ
+            </a>
+            <? } ?>
+
+            <a href="<?= ScriptApp.getService().getUrl() ?>" class="nav-link text-muted" title="初期表示へ戻る">
+                <span>🔄</span> 切り替え
+            </a>
+        </div>
+    </div>
+</nav>
+
+<style>
+    .nav-bar {
+        background: white;
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.5rem 0;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .nav-brand {
+        font-weight: bold;
+        color: var(--primary-text);
+        font-size: 1.1rem;
+    }
+
+    .nav-link {
+        text-decoration: none;
+        color: var(--text-color);
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .nav-link:hover {
+        background: var(--bg-color);
+    }
+
+    .nav-link.active {
+        color: var(--primary-text);
+        background: var(--primary-color);
+    }
+
+    /* Mobile optimization */
+    @media (max-width: 600px) {
+        .nav-links {
+            gap: 0.5rem;
+        }
+
+        .nav-link span {
+            margin: 0;
+        }
+
+        .nav-link {
+            font-size: 0.75rem;
+            padding: 0.4rem 0.5rem;
+        }
+
+        .nav-brand {
+            display: none;
+        }
+    }
+</style>

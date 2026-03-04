@@ -10,6 +10,8 @@
 </head>
 
 <body>
+    <?!= include('pages/navigation'); ?>
+
     <!-- Full Screen Alert Overlay -->
     <div id="full-screen-alert" class="hidden">
         <h1 id="alert-child-name">○○ さん</h1>
@@ -38,7 +40,7 @@
     </div>
 
     <div class="container">
-        <div class="d-flex justify-between align-center mb-4">
+        <div class="d-flex justify-between align-center mb-4 mt-2">
             <div>
                 <h1 style="color: var(--primary-text); font-size: 1.5rem; margin: 0;">ダッシュボード</h1>
                 <p class="text-muted" id="current-date-display" style="margin: 0;"></p>
