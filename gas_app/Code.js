@@ -1,5 +1,5 @@
 // ==========================================
-// KiraKira Manager - GAS Backend (Ver 3.1.1)
+// KiraKira Manager - GAS Backend (Ver 3.1.2)
 // ==========================================
 
 // --- Configuration ---
@@ -10,9 +10,21 @@ function getDB() {
 
 // --- Entry Point (Routing) ---
 function doGet(e) {
-    var page = e.parameter.page || 'login';
-    var template;
+    var user = getCurrentUser();
+    var page = e.parameter.page;
 
+    // Server-side Routing logic
+    if (!page) {
+        if (user.role === 'admin' || user.role === 'staff') {
+            page = 'admin';
+        } else if (user.role === 'parent') {
+            page = 'parent';
+        } else {
+            page = 'login';
+        }
+    }
+
+    var template;
     if (page === 'admin') {
         template = createTemplate('pages/admin-dashboard');
     } else if (page === 'parent') {
@@ -21,7 +33,8 @@ function doGet(e) {
         template = createTemplate('pages/login');
     }
 
-    // Pass URL parameters to the template if needed
+    // Pass user and URL parameters to the template
+    template.user = user;
     template.urlParams = e.parameter;
 
     return template.evaluate()
@@ -29,9 +42,25 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+// Global cache for include contents within one execution
+var _includeCache = {};
+
 // --- Includes ---
 function include(filename) {
-    return createTemplate(filename).evaluate().getContent();
+    if (_includeCache[filename]) return _includeCache[filename];
+
+    // For style pages, we don't need scriptlet evaluation
+    if (filename.indexOf('style') !== -1) {
+        try {
+            var content = HtmlService.createHtmlOutputFromFile(filename).getContent();
+            _includeCache[filename] = content;
+            return content;
+        } catch (e) { /* fallback to template below */ }
+    }
+
+    var content = createTemplate(filename).evaluate().getContent();
+    _includeCache[filename] = content;
+    return content;
 }
 
 // Helper for Robust Template Creation
@@ -45,8 +74,7 @@ function createTemplate(filename) {
             try {
                 return HtmlService.createTemplateFromFile(flatName);
             } catch (e2) {
-                // Return a descriptive error if both fail
-                throw new Error("HTMLファイルが見つかりません。ファイル名を確認してください: " + filename + " (" + flatName + ")");
+                throw new Error("HTMLファイルが見つかりません: " + filename + " (" + flatName + ")");
             }
         }
         throw e;
@@ -58,13 +86,19 @@ function createTemplate(filename) {
 // ==========================================
 
 function getCurrentUser() {
+    var userCache = CacheService.getUserCache();
+    var cached = userCache.get("current_user_v2");
+    if (cached) return JSON.parse(cached);
+
     var email = Session.getActiveUser().getEmail();
-    // For testing purposes, if email is empty (e.g. executing as me), use a mock
-    if (!email) {
-        email = 'test@example.com';
-    }
+    if (!email) email = 'test@example.com';
 
     var db = getDB();
+    var user = {
+        email: email,
+        role: 'unknown',
+        name: '未登録ユーザー'
+    };
 
     // 1. Check if Admin/Staff
     var staffSheet = db.getSheetByName('職員マスタ');
@@ -72,36 +106,37 @@ function getCurrentUser() {
         var staffData = staffSheet.getDataRange().getValues();
         for (var i = 1; i < staffData.length; i++) {
             if (staffData[i][1] === email) { // B列: email
-                return {
+                user = {
                     email: email,
                     name: staffData[i][0] || '職員',
                     role: staffData[i][2] === 'admin' ? 'admin' : 'staff'
                 };
+                break;
             }
         }
     }
 
     // 2. Check if Parent
-    var parentSheet = db.getSheetByName('保護者マスタ');
-    if (parentSheet) {
-        var parentData = parentSheet.getDataRange().getValues();
-        for (var j = 1; j < parentData.length; j++) {
-            if (parentData[j][4] === email) { // E列: email
-                return {
-                    email: email,
-                    name: parentData[j][1] || '保護者',
-                    role: 'parent'
-                };
+    if (user.role === 'unknown') {
+        var parentSheet = db.getSheetByName('保護者マスタ');
+        if (parentSheet) {
+            var parentData = parentSheet.getDataRange().getValues();
+            for (var j = 1; j < parentData.length; j++) {
+                if (parentData[j][4] === email) { // E列: email
+                    user = {
+                        email: email,
+                        name: parentData[j][1] || '保護者',
+                        role: 'parent'
+                    };
+                    break;
+                }
             }
         }
     }
 
-    // Not found
-    return {
-        email: email,
-        role: 'unknown',
-        name: '未登録ユーザー'
-    };
+    // Cache results for 1 hour (3600 seconds)
+    userCache.put("current_user_v2", JSON.stringify(user), 3600);
+    return user;
 }
 
 function getLinkedChildren(parentEmail) {

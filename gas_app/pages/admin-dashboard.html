@@ -122,7 +122,7 @@
 
     <script>
         let currentDate = new Date();
-        let currentUser = null;
+        let currentUser = <?!= JSON.stringify(user) ?>;
         let attendanceData = [];
         let activeAlertChild = null; // null or child object
 
@@ -150,18 +150,10 @@
 
         function init() {
             document.getElementById('sync-spinner').classList.remove('hidden');
-            google.script.run
-                .withSuccessHandler(function (user) {
-                    currentUser = user;
-                    document.getElementById('user-name').innerText = user.name;
-                    loadData();
-                    // Start polling every 15 seconds
-                    setInterval(loadData, 15000);
-                })
-                .withFailureHandler(function (e) {
-                    showToast('ユーザー情報の取得に失敗しました', true);
-                })
-                .getCurrentUser();
+            document.getElementById('user-name').innerText = currentUser.name;
+            loadData();
+            // Start polling every 15 seconds
+            setInterval(loadData, 15000);
         }
 
         function loadData() {

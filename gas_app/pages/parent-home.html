@@ -170,17 +170,16 @@
     <div id="toast-container"></div>
 
     <script>
-        let currentUser = null;
+        let currentUser = <?!= JSON.stringify(user) ?>;
         let childrenList = [];
         let activeChildId = null;
         let reservations = [];
 
         let calDate = new Date();
         let selectedDates = new Set();
-        const TODAY_STR = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd') || new Date().toISOString().split('T')[0];
+        const TODAY_STR = new Date().toISOString().split('T')[0];
 
-        // Polyfill for frontend where Utilities not available (injected scripts dont have GAS APIs locally)
-        // Actually, we must do date formatting in pure JS here
+        // Polyfill for frontend where Utilities not available
         function toYMD(d) {
             return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
         }
@@ -197,13 +196,8 @@
         }
 
         window.onload = function () {
-            google.script.run
-                .withSuccessHandler(function (user) {
-                    currentUser = user;
-                    document.getElementById('user-greeting').innerText = user.name + ' 様';
-                    loadChildren(user.email);
-                })
-                .getCurrentUser();
+            document.getElementById('user-greeting').innerText = currentUser.name + ' 様';
+            loadChildren(currentUser.email);
         };
 
         function loadChildren(email) {
