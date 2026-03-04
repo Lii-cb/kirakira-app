@@ -191,7 +191,7 @@
         }
 
         window.onload = function () {
-            document.getElementById('user-greeting').innerText = currentUser.name + ' 様';
+            // document.getElementById('user-greeting').innerText = currentUser.name + ' 様'; // Removed as it is now in navigation
             loadChildren(currentUser.email);
         };
 

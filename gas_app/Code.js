@@ -171,26 +171,33 @@ function getLinkedChildren(parentEmail) {
 
     if (!parentSheet || !childSheet) return [];
 
+    // Verify user role
+    var currentUser = getCurrentUser();
+    var isAdmin = (currentUser.role === 'admin' || currentUser.role === 'staff');
+
     // Find parent's linked child IDs
     var parentData = parentSheet.getDataRange().getValues();
     var linkedChildIdsStr = "";
-    for (var i = 1; i < parentData.length; i++) {
-        if (parentData[i][4] === parentEmail) {
-            linkedChildIdsStr = parentData[i][5] || ""; // F列: 児童ID (カンマ区切り)
-            break;
+
+    // If admin, we don't need to filter by email (optional: return all)
+    // For now, let's say admins see all children to test the UI.
+    if (!isAdmin) {
+        for (var i = 1; i < parentData.length; i++) {
+            if (parentData[i][4] === parentEmail) {
+                linkedChildIdsStr = parentData[i][5] || ""; // F列: 児童ID (カンマ区切り)
+                break;
+            }
         }
     }
-
-    if (!linkedChildIdsStr) return [];
-    var childIds = linkedChildIdsStr.split(',').map(function (id) { return id.trim(); });
 
     // Get child details
     var childData = childSheet.getDataRange().getValues();
     var children = [];
+    var childIds = linkedChildIdsStr ? linkedChildIdsStr.split(',').map(function (id) { return id.trim(); }) : [];
 
     for (var j = 1; j < childData.length; j++) {
         var id = childData[j][0] ? childData[j][0].toString() : '';
-        if (childIds.indexOf(id) !== -1) {
+        if (isAdmin || childIds.indexOf(id) !== -1) {
             children.push({
                 id: id,
                 name: childData[j][1],
