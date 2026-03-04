@@ -137,6 +137,11 @@
         document.getElementById('current-date-display').innerText =
             currentDate.getFullYear() + '年' + (currentDate.getMonth() + 1) + '月' + currentDate.getDate() + '日 (' + ['日', '月', '火', '水', '木', '金', '土'][currentDate.getDay()] + ')';
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         function showToast(message, isError = false) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -200,19 +205,19 @@
             memos.forEach(m => {
                 let catHtml = '';
                 if (m.categories && m.categories.length > 0) {
-                    catHtml = m.categories.map(c => `<span class="badge" style="background:#e2e8f0; color:#475569; margin-right:4px;">${c}</span>`).join('');
+                    catHtml = m.categories.map(c => `<span class="badge" style="background:#e2e8f0; color:#475569; margin-right:4px;">${escapeHtml(c)}</span>`).join('');
                 }
 
                 container.innerHTML += `
                     <div style="background: white; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 0.5rem;">
                         <div class="d-flex justify-between align-center mb-2" style="font-size: 0.75rem;">
                             <div>
-                                <span class="font-bold">${m.author}</span>
-                                <span class="text-muted ml-2">${m.time}</span>
+                                <span class="font-bold">${escapeHtml(m.author)}</span>
+                                <span class="text-muted ml-2">${escapeHtml(m.time)}</span>
                             </div>
                             <div>${catHtml}</div>
                         </div>
-                        <div style="font-size: 0.875rem; white-space: pre-wrap;">${m.content}</div>
+                        <div style="font-size: 0.875rem; white-space: pre-wrap;">${escapeHtml(m.content)}</div>
                     </div>
                 `;
             });

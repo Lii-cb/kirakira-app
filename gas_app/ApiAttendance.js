@@ -34,12 +34,7 @@ function getAttendanceList(dateStr) {
         var rowDate = row[2]; // C列: 日付
 
         // GAS date format handling
-        var rowDateStr = "";
-        if (rowDate instanceof Date) {
-            rowDateStr = Utilities.formatDate(rowDate, 'Asia/Tokyo', 'yyyy-MM-dd');
-        } else {
-            rowDateStr = rowDate.toString();
-        }
+        var rowDateStr = formatDateStr(rowDate);
 
         if (rowDateStr === dateStr) {
             var childId = row[1].toString(); // B列: 児童ID
@@ -106,6 +101,7 @@ function getAttendanceList(dateStr) {
 }
 
 function updateAttendance(childId, dateStr, updates) {
+    requireRole(['admin', 'staff']);
     var db = getDB();
     var sheet = db.getSheetByName('出席記録');
     var lock = LockService.getScriptLock();

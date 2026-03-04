@@ -27,12 +27,7 @@ function getStaffAttendance(dateStr) {
 
     for (var j = 1; j < data.length; j++) {
         var row = data[j];
-        var rDateStr = "";
-        if (row[2] instanceof Date) {
-            rDateStr = Utilities.formatDate(row[2], 'Asia/Tokyo', 'yyyy-MM-dd');
-        } else {
-            rDateStr = row[2] ? row[2].toString() : '';
-        }
+        var rDateStr = formatDateStr(row[2]);
 
         if (rDateStr === dateStr) {
             var sEmail = row[1];
@@ -71,6 +66,7 @@ function getStaffAttendance(dateStr) {
 }
 
 function updateStaffStatus(dateStr, staffEmail, updates) {
+    requireRole(['admin', 'staff']);
     var db = getDB();
     var sheet = db.getSheetByName('職員出勤記録');
     var lock = LockService.getScriptLock();

@@ -1,11 +1,30 @@
 // ==========================================
-// KiraKira Manager - GAS Backend (Ver 3.1.4)
+// KiraKira Manager - GAS Backend (Ver 3.2.0)
 // ==========================================
 
+var APP_VERSION = '3.2.0';
+
 // --- Configuration ---
-// The script is bound to the Spreadsheet, so we use SpreadsheetApp.getActiveSpreadsheet()
 function getDB() {
     return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+// --- Authorization Helper ---
+function requireRole(allowedRoles) {
+    var user = getCurrentUser();
+    if (allowedRoles.indexOf(user.role) === -1) {
+        throw new Error('権限がありません (' + user.role + ')');
+    }
+    return user;
+}
+
+// --- Date Helper ---
+function formatDateStr(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+        return Utilities.formatDate(value, 'Asia/Tokyo', 'yyyy-MM-dd');
+    }
+    return value.toString();
 }
 
 // --- Entry Point (Routing) ---

@@ -12,12 +12,7 @@ function getReservations(dateStr) {
 
     for (var i = 1; i < data.length; i++) {
         var row = data[i];
-        var rDateStr = "";
-        if (row[2] instanceof Date) {
-            rDateStr = Utilities.formatDate(row[2], 'Asia/Tokyo', 'yyyy-MM-dd');
-        } else {
-            rDateStr = row[2] ? row[2].toString() : '';
-        }
+        var rDateStr = formatDateStr(row[2]);
 
         if (!dateStr || rDateStr === dateStr) {
             result.push({
@@ -47,12 +42,7 @@ function getReservationsForChild(childId) {
     for (var i = 1; i < data.length; i++) {
         var row = data[i];
         if (row[1].toString() === childId.toString()) {
-            var rDateStr = "";
-            if (row[2] instanceof Date) {
-                rDateStr = Utilities.formatDate(row[2], 'Asia/Tokyo', 'yyyy-MM-dd');
-            } else {
-                rDateStr = row[2] ? row[2].toString() : '';
-            }
+            var rDateStr = formatDateStr(row[2]);
 
             result.push({
                 id: row[0],
@@ -87,6 +77,18 @@ function submitReservation(childId, dates, time, hasSnack) {
         lock.waitLock(5000);
 
         var timestamp = new Date();
+
+        // 重複チェック
+        var existingData = sheet.getDataRange().getValues();
+        for (var d = 0; d < dates.length; d++) {
+            for (var chk = 1; chk < existingData.length; chk++) {
+                if (existingData[chk][1].toString() === childId.toString() &&
+                    formatDateStr(existingData[chk][2]) === dates[d] &&
+                    existingData[chk][4] !== 'cancelled') {
+                    return { success: false, error: dates[d] + ' は既に予約済みです' };
+                }
+            }
+        }
 
         for (var i = 0; i < dates.length; i++) {
             var dateStr = dates[i];

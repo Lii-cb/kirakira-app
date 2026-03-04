@@ -12,12 +12,7 @@ function getDailyMemos(dateStr) {
     var result = [];
 
     for (var i = 1; i < data.length; i++) {
-        var rDateStr = "";
-        if (data[i][1] instanceof Date) { // B列: 日付
-            rDateStr = Utilities.formatDate(data[i][1], 'Asia/Tokyo', 'yyyy-MM-dd');
-        } else {
-            rDateStr = data[i][1] ? data[i][1].toString() : '';
-        }
+        var rDateStr = formatDateStr(data[i][1]);
 
         if (!dateStr || rDateStr === dateStr) {
             result.push({
@@ -34,6 +29,7 @@ function getDailyMemos(dateStr) {
 }
 
 function addDailyMemo(dateStr, categoriesArray, content) {
+    requireRole(['admin', 'staff']);
     var db = getDB();
     var sheet = db.getSheetByName('日報');
     var lock = LockService.getScriptLock();
@@ -156,6 +152,7 @@ function submitPaymentReport(childId, amount) {
 }
 
 function confirmPayment(paymentId) {
+    requireRole(['admin']);
     var db = getDB();
     var sheet = db.getSheetByName('入金');
     var lock = LockService.getScriptLock();
