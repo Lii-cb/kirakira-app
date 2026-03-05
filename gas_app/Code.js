@@ -33,27 +33,29 @@ function doGet(e) {
     var page = e.parameter.page;
 
     // Clear cache to avoid role mismatches
-    if (!page || page === 'admin') {
+    if (!page) {
         CacheService.getUserCache().remove("current_user_v2");
         user = getCurrentUser(); // Re-fetch
     }
 
-    // Default page logic based on role
+    // Default: Show Login Portal
     if (!page) {
-        if (user.role === 'admin' || user.role === 'staff') page = 'admin';
-        else if (user.role === 'parent') page = 'parent';
-        else page = 'login';
+        page = 'login';
     }
 
     var adminPages = ['admin', 'finance', 'documents', 'children', 'settings', 'reservations'];
     var isAdmin = (user.role === 'admin' || user.role === 'staff');
 
-    // Redirect unauthorized access
+    // Permission Guard
+    var loginError = null;
     if (adminPages.indexOf(page) !== -1 && !isAdmin) {
-        console.warn("Unauthorized access to " + page + " by " + user.email + " (role: " + user.role + ")");
+        loginError = '職員権限がありません。';
         page = 'login';
     }
-    if (page === 'parent' && user.role === 'unknown') page = 'login';
+    if (page === 'parent' && user.role === 'unknown') {
+        loginError = '保護者として登録されていません。';
+        page = 'login';
+    }
 
     var template;
     if (page === 'admin') {
@@ -77,6 +79,7 @@ function doGet(e) {
     // Pass user and URL parameters to the template
     template.user = user;
     template.urlParams = e.parameter;
+    template.loginError = loginError;
 
     try {
         return template.evaluate()
