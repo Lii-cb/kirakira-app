@@ -5,29 +5,83 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>設定 - きらきらマネージャー</title>
+    <title>設定 - きらきら放課後児童クラブ</title>
     <?!= include('pages/style'); ?>
 </head>
 
 <body>
     <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <?!= include('pages/utils'); ?>
     <div class="container mt-2">
         <h1 style="font-size:1.25rem; color:var(--primary-text);">⚙️ システム設定</h1>
+        <!-- Facility Info -->
+        <div class="card mb-4">
+            <h2 class="h6 mb-3">基本設定・開所時間</h2>
+            <div class="grid mb-3">
+                <div>
+                    <label class="font-bold d-block mb-1">施設名</label>
+                    <input type="text" id="facilityName">
+                </div>
+                <div>
+                    <label class="font-bold d-block mb-1">Webhook URL (通知用)</label>
+                    <input type="text" id="webhookUrl">
+                </div>
+            </div>
+            <div class="grid">
+                <div>
+                    <label class="font-bold d-block mb-1">平常時（平日）開所時間</label>
+                    <input type="text" id="openWeekday" placeholder="例: 15:00-18:30">
+                </div>
+                <div>
+                    <label class="font-bold d-block mb-1">土曜開所時間</label>
+                    <input type="text" id="openSaturday" placeholder="例: 7:30-12:00">
+                </div>
+            </div>
+        </div>
+
+        <!-- Master Data Lists -->
+        <div class="card mb-4">
+            <h2 class="h6 mb-3">選択肢マスター管理</h2>
+            <p class="text-secondary mb-3" style="font-size:0.8rem;">項目をカンマ( , )区切りで入力してください。</p>
+            <div class="grid mb-3">
+                <div>
+                    <label class="font-bold d-block mb-1">帰り方の選択肢</label>
+                    <textarea id="returnMethods" rows="2" placeholder="例: お迎え, バス, 自力帰宅"></textarea>
+                </div>
+                <div>
+                    <label class="font-bold d-block mb-1">おたよりカテゴリ</label>
+                    <textarea id="docCategories" rows="2" placeholder="例: お知らせ, 行事, その他"></textarea>
+                </div>
+            </div>
+            <div>
+                <label class="font-bold d-block mb-1">日報カテゴリ</label>
+                <textarea id="memoCategories" rows="2" placeholder="例: 一般, 連絡事項, ヒヤリハット"></textarea>
+            </div>
+        </div>
+
+        <!-- Detailed Staff Attendance Management (NEW) -->
+        <div class="card mb-4" id="detailed-staff-card">
+            <div class="d-flex justify-between align-center mb-4">
+                <h2 style="font-size:1rem; margin:0;">👥 職員詳細出勤管理 (当日)</h2>
+                <div class="d-flex align-center gap-2">
+                    <span id="staff-sync-time" class="text-muted" style="font-size:0.7rem;"></span>
+                    <button class="btn-outline" onclick="syncStaffTable()" id="staff-sync-btn"
+                        style="padding:0.25rem 0.6rem; font-size:0.8rem;">🔄 マスタと同期</button>
+                </div>
+            </div>
+            <div id="staff-attendance-container" style="overflow-x:auto;">
+                <p class="text-muted">読み込み中...</p>
+            </div>
+        </div>
 
         <div class="card">
             <h2 style="font-size:1rem; margin-top:0;">基本設定</h2>
 
-            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">施設名</label>
-            <input type="text" id="facility-name" placeholder="施設名" class="mb-4">
+            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">基本料金（円/月）</label>
+            <input type="number" id="base-fee" placeholder="例: 0" class="mb-4" min="0">
 
             <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">おやつ料金（円/日）</label>
             <input type="number" id="snack-fee" placeholder="例: 100" class="mb-4" min="0">
-
-            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">Webhook URL（Google Chat）</label>
-            <input type="url" id="webhook-url" placeholder="https://chat.googleapis.com/..." class="mb-4">
-
-            <label class="d-block mb-2 font-bold" style="font-size:0.875rem;">管理者PIN（4桁以上の数字）</label>
-            <input type="number" id="admin-pin" placeholder="例: 2580" class="mb-4" min="1000">
 
             <button class="btn-primary" onclick="saveSettings()" style="width:100%;">設定を保存</button>
         </div>
@@ -45,46 +99,179 @@
                         <?= user.role ?>
                     </strong></div>
             </div>
+            <!-- Archive Section -->
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                <h2 style="font-size: 1rem; margin-bottom: 0.5rem;">📦 データのアーカイブ (Phase 3)</h2>
+                <p class="text-muted" style="font-size: 0.8rem;">
+                    出席記録や日報などを「アーカイブ」シートに移動し、動作を高速化します。
+                    指定日より前のすべての記録が移動されます。
+                </p>
+                <div class="d-flex gap-2 align-center mt-2">
+                    <input type="date" id="archive-date" class="mb-0" style="width: auto;">
+                    <button class="btn-outline" style="border-color: #ef4444; color: #ef4444;"
+                        onclick="runArchive()">アーカイブ実行</button>
+                </div>
+            </div>
         </div>
+    </div>
     </div>
     <div id="toast-container"></div>
 
     <script>
-        function showToast(msg, isError = false) {
-            const c = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast' + (isError ? ' error' : '');
-            t.innerText = msg;
-            c.appendChild(t);
-            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
-        }
+        // showToast is now in utils.html
 
         window.onload = function () {
             google.script.run
                 .withSuccessHandler(function (s) {
                     if (!s) return;
-                    document.getElementById('facility-name').value = s.facilityName || '';
+                    document.getElementById('facilityName').value = s.facilityName || '';
+                    document.getElementById('base-fee').value = s.baseFee || '0';
                     document.getElementById('snack-fee').value = s.snackFee || '';
-                    document.getElementById('webhook-url').value = s.webhookUrl || '';
-                    document.getElementById('admin-pin').value = s.adminPin || '';
+                    document.getElementById('webhookUrl').value = s.webhookUrl || '';
+                    document.getElementById('openWeekday').value = s.openWeekday || '';
+                    document.getElementById('openSaturday').value = s.openSaturday || '';
+                    document.getElementById('returnMethods').value = (s.returnMethods || []).join(', ');
+                    document.getElementById('docCategories').value = (s.docCategories || []).join(', ');
+                    document.getElementById('memoCategories').value = (s.memoCategories || []).join(', ');
                 })
                 .withFailureHandler(function () { })
                 .getSettings();
+            loadStaffData();
         };
 
         function saveSettings() {
             const settings = {
-                facilityName: document.getElementById('facility-name').value,
+                facilityName: document.getElementById('facilityName').value,
+                baseFee: parseInt(document.getElementById('base-fee').value) || 0,
                 snackFee: parseInt(document.getElementById('snack-fee').value) || 100,
-                webhookUrl: document.getElementById('webhook-url').value,
-                adminPin: document.getElementById('admin-pin').value
+                webhookUrl: document.getElementById('webhookUrl').value,
+                openWeekday: document.getElementById('openWeekday').value,
+                openSaturday: document.getElementById('openSaturday').value,
+                returnMethods: document.getElementById('returnMethods').value,
+                docCategories: document.getElementById('docCategories').value,
+                memoCategories: document.getElementById('memoCategories').value
             };
             google.script.run
                 .withSuccessHandler(function (r) {
                     showToast(r.success ? '設定を保存しました ✅' : 'エラー: ' + r.error, !r.success);
+                    if (r.success) loadStaffData();
                 })
                 .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
                 .saveSettings(settings);
+        }
+
+        const DATE_STR = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+        function loadStaffData() {
+            google.script.run
+                .withSuccessHandler(renderStaffAttendance)
+                .withFailureHandler(function () { })
+                .getStaffAttendance(DATE_STR);
+        }
+
+        function renderStaffAttendance(staff) {
+            const container = document.getElementById('staff-attendance-container');
+            if (!staff || staff.length === 0) {
+                container.innerHTML = '<p class="text-muted">職員データがありません。</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-color); text-align:left;">
+                            <th style="padding:0.5rem;">名前</th>
+                            <th style="padding:0.5rem;">状況</th>
+                            <th style="padding:0.5rem;">シフト</th>
+                            <th style="padding:0.5rem;">計 / 給与</th>
+                            <th style="padding:0.5rem;">出退勤</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${staff.map(s => {
+                const totalHrs = (s.totalMinutes || 0) / 60;
+                const salary = Math.floor(totalHrs * (s.hourlyRate || 0));
+                const timeStr = Math.floor(s.totalMinutes / 60) + 'h' + (s.totalMinutes % 60) + 'm';
+
+                return `
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding:0.5rem; font-weight:bold;">${escapeHtml(s.name)}</td>
+                                <td style="padding:0.5rem;">
+                                    <select onchange="updateStaffStatus('${s.email}', this.value)" style="padding:2px; font-size:0.75rem; border:1px solid var(--border-color); border-radius:4px;">
+                                        <option value="未定" ${s.status === '未定' ? 'selected' : ''}>未定</option>
+                                        <option value="予定" ${s.status === '予定' ? 'selected' : ''}>予定</option>
+                                        <option value="在室" ${s.status === '在室' ? 'selected' : ''}>在室</option>
+                                        <option value="一時退室" ${s.status === '一時退室' ? 'selected' : ''}>一時退室</option>
+                                        <option value="退勤" ${s.status === '退勤' ? 'selected' : ''}>退勤</option>
+                                        <option value="休み" ${s.status === '休み' ? 'selected' : ''}>休み</option>
+                                    </select>
+                                </td>
+                                <td style="padding:0.5rem; color:var(--text-muted); font-size:0.75rem;">${escapeHtml(s.shiftTime || '-')}</td>
+                                <td style="padding:0.5rem; font-size:0.75rem;">
+                                    <div class="font-bold">${timeStr}</div>
+                                    <div style="color:#166534; font-size:0.7rem;">¥${salary.toLocaleString()}</div>
+                                </td>
+                                <td style="padding:0.5rem; font-size:0.75rem; color:var(--text-muted);">
+                                    ${s.actualTime || '--:--'} 〜 ${s.actualEndTime || '--:--'}
+                                </td>
+                            </tr>
+                            `;
+            }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function updateStaffStatus(email, status) {
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    showToast(r.success ? '職員ステータスを更新しました' : 'エラー: ' + r.error, !r.success);
+                    loadStaffData();
+                })
+                .withFailureHandler(function (e) { showToast('サーバーエラー', true); })
+                .updateStaffStatus(DATE_STR, email, { status: status });
+        }
+
+        function syncStaffTable() {
+            const btn = document.getElementById('staff-sync-btn');
+            const timeEl = document.getElementById('staff-sync-time');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '同期中...';
+
+            google.script.run
+                .withSuccessHandler(function (staff) {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                    const now = new Date();
+                    timeEl.innerText = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ' 同期済';
+                    renderStaffAttendance(staff);
+                    showToast('職員情報をマスタから同期しました');
+                })
+                .withFailureHandler(function (e) {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                    showToast('同期エラー: ' + e.message, true);
+                })
+                .getStaffAttendance(DATE_STR);
+        }
+        function runArchive() {
+            const date = document.getElementById('archive-date').value;
+            if (!date) return alert('日付を指定してください');
+            if (!confirm(date + ' 以前の全データをアーカイブに移動します。よろしいですか？')) return;
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerText = '実行中...';
+
+            google.script.run
+                .withSuccessHandler(res => {
+                    btn.disabled = false;
+                    btn.innerText = 'アーカイブ実行';
+                    if (res.success) showToast(res.movedCount + ' 件のデータを移動しました', 'success');
+                    else showToast('エラー: ' + res.error, 'error');
+                })
+                .archiveOldData(date);
         }
     </script>
 </body>

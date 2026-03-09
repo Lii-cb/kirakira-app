@@ -5,7 +5,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ログイン - きらきらマネージャー</title>
+  <title>ログイン - きらきら放課後児童クラブ</title>
   <?!= include('pages/style'); ?>
   <style>
     body {
@@ -41,18 +41,26 @@
       }
     }
 
+    .brand-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
     .app-logo {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      display: block;
+      font-size: 2.5rem;
+      flex-shrink: 0;
     }
 
     .app-name {
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 800;
       color: #1e293b;
-      margin-bottom: 0.5rem;
+      margin: 0;
       letter-spacing: -0.025em;
+      white-space: nowrap;
     }
 
     .welcome-text {
@@ -149,43 +157,315 @@
 
 <body>
   <div class="login-card">
-    <span class="app-logo">🌟</span>
-    <h1 class="app-name">きらきらマネージャー</h1>
+    <div class="brand-container">
+      <span class="app-logo">🌟</span>
+      <h1 class="app-name">きらきら放課後児童クラブ</h1>
+    </div>
     <p class="welcome-text">学童保育・予約管理システム</p>
 
-    <div class="user-pill">
-      <?= user.email ?>
-    </div>
+    <? var baseUrl = ScriptApp.getService().getUrl(); ?>
 
-    <? if (loginError) { ?>
-    <div class="error-box">
-      <strong>⚠️ アクセス制限</strong><br>
-      <?= loginError ?>
-    </div>
-    <? } ?>
+    <div id="login-form">
+      <div id="email-entry-section">
+        <div class="input-group" style="margin-bottom: 1.5rem;">
+          <label for="login-email"
+            style="display:block; text-align:left; font-size:0.85rem; font-weight:700; color:#475569; margin-bottom:0.5rem;">登録メールアドレス</label>
+          <input type="email" id="login-email" placeholder="example@gmail.com"
+            style="width:100%; padding:1rem; border-radius:12px; border:2px solid #e2e8f0; font-size:1rem; transition:border-color 0.2s;"
+            onkeypress="if(event.key==='Enter') verifyEmail()">
+        </div>
+        <button onclick="verifyEmail()" id="verify-btn" class="login-btn btn-staff" style="width:100%;">
+          次へ進む
+        </button>
+      </div>
 
-    <? if (user.role === 'unknown') { ?>
-    <div class="error-box" style="margin-bottom: 0;">
-      <p style="margin:0;">このメールアドレスは登録されていません。<br>
-        ご利用には登録が必要です。</p>
-      <p style="margin-top:0.75rem; font-weight:700;">児童クラブスタッフにお問合せください。</p>
+      <div id="user-status-section" class="hidden">
+        <div id="user-info-pill" class="user-pill" style="margin-bottom: 1.5rem;">
+          <!-- JS fills this -->
+        </div>
+
+        <!-- PIN Setup Section (First Time Only) -->
+        <div id="pin-setup-section" class="hidden">
+          <div
+            style="background:#fef3c7; color:#92400e; padding:1rem; border-radius:12px; margin-bottom:1.5rem; font-size:0.85rem;">
+            <strong>🔓 初回設定</strong><br>
+            セキュリティのため、ログイン用の暗証番号（4桁以上）を設定してください。次回からこの番号が必要になります。
+          </div>
+          <div class="input-group" style="margin-bottom: 1.5rem;">
+            <label for="new-pin"
+              style="display:block; text-align:left; font-size:0.85rem; font-weight:700; color:#475569; margin-bottom:0.5rem;">新しい暗証番号</label>
+            <input type="password" id="new-pin" placeholder="数字4桁以上"
+              style="width:100%; padding:1rem; border-radius:12px; border:2px solid #e2e8f0; font-size:1.5rem; letter-spacing:0.5rem; text-align:center;"
+              inputmode="numeric">
+          </div>
+          <button onclick="setupPin()" id="setup-btn" class="login-btn btn-staff" style="width:100%;">
+            設定を完了してログイン
+          </button>
+          <button onclick="resetLoginForm()" class="btn-outline"
+            style="width:100%; margin-top:1rem; border:none; color:#64748b; font-size:0.85rem;">
+            キャンセル
+          </button>
+        </div>
+
+        <!-- PIN Entry Section -->
+        <div id="pin-entry-section" class="hidden">
+          <div class="input-group" style="margin-bottom: 1.5rem;">
+            <label for="login-pin"
+              style="display:block; text-align:left; font-size:0.85rem; font-weight:700; color:#475569; margin-bottom:0.5rem;">暗証番号を入力</label>
+            <input type="password" id="login-pin" placeholder="****"
+              style="width:100%; padding:1rem; border-radius:12px; border:2px solid #e2e8f0; font-size:1.5rem; letter-spacing:0.5rem; text-align:center;"
+              inputmode="numeric" onkeypress="if(event.key==='Enter') submitPin()">
+          </div>
+          <button onclick="submitPin()" id="pin-btn" class="login-btn btn-staff" style="width:100%;">
+            認証してログイン
+          </button>
+          <button onclick="resetLoginForm()" class="btn-outline"
+            style="width:100%; margin-top:1rem; border:none; color:#64748b; font-size:0.85rem;">
+            キャンセル
+          </button>
+        </div>
+
+        <div id="registered-actions" class="hidden">
+          <div class="login-options">
+            <a href="<?= baseUrl ?>?page=admin" id="admin-link" class="login-btn btn-staff hidden">
+              <span>💼</span> 職員ログイン
+            </a>
+            <a href="<?= baseUrl ?>?page=parent" id="parent-link" class="login-btn btn-parent hidden">
+              <span>🏠</span> 保護者ログイン
+            </a>
+          </div>
+          <button onclick="resetLoginForm()" class="btn-outline"
+            style="width:100%; margin-top:1.5rem; border:none; color:#64748b; font-size:0.85rem;">
+            別のメールアドレスで入力する
+          </button>
+        </div>
+
+        <div id="unregistered-actions" class="hidden">
+          <div class="error-box" style="margin-bottom: 1.5rem;">
+            <p style="margin:0;">このアドレスは登録されていません。利用には管理者の共通設定（登録）が必要です。</p>
+          </div>
+          <div class="login-options">
+            <button onclick="requestRegistration()" id="request-btn" class="login-btn btn-staff">
+              <span>📝</span> 登録を申請する
+            </button>
+          </div>
+          <button onclick="resetLoginForm()" class="btn-outline"
+            style="width:100%; margin-top:1.5rem; border:none; color:#64748b; font-size:0.85rem;">
+            戻る
+          </button>
+        </div>
+      </div>
+
+      <!-- Request Success Message -->
+      <div id="request-success" class="hidden">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+        <h3 style="margin-bottom: 0.5rem; color: #059669;">申請を送信しました</h3>
+        <p id="success-msg-text" style="color: #64748b; font-size: 0.875rem; line-height: 1.5; margin-bottom: 1.5rem;">
+          管理者が登録を承認するまで、しばらくお待ちください。
+        </p>
+        <button onclick="resetLoginForm()" class="login-btn btn-staff" style="width:100%;">
+          ログイン画面に戻る
+        </button>
+      </div>
     </div>
-    <? } else { ?>
-    <div class="login-options">
-      <? var _baseUrl = ScriptApp.getService().getUrl(); ?>
-      <a href="<?= _baseUrl ?>?page=admin" class="login-btn btn-staff">
-        <span>💼</span> 職員ログイン
-      </a>
-      <a href="<?= _baseUrl ?>?page=parent" class="login-btn btn-parent">
-        <span>🏠</span> 保護者ログイン
-      </a>
-    </div>
-    <? } ?>
 
     <div class="contact-info">
       &copy; 2026 きらきら児童クラブ
     </div>
   </div>
+
+  <script>
+    let currentEmail = '';
+
+    function verifyEmail() {
+      const emailInput = document.getElementById('login-email');
+      const email = emailInput.value.trim();
+      if (!email || !email.includes('@')) {
+        alert('有効なメールアドレスを入力してください。');
+        return;
+      }
+
+      const btn = document.getElementById('verify-btn');
+      btn.disabled = true;
+      btn.innerText = '照会中...';
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false;
+          btn.innerText = '次へ進む';
+
+          if (res.success) {
+            currentEmail = email;
+            showUserStatus(res.user, res.requiresPin, res.needsPinSetup);
+          } else {
+            alert('エラー: ' + res.error);
+          }
+        })
+        .withFailureHandler(function (e) {
+          btn.disabled = false;
+          btn.innerText = '次へ進む';
+          alert('システムエラーが発生しました。');
+        })
+        .checkUserStatus(email);
+    }
+
+    function showUserStatus(user, requiresPin, needsPinSetup) {
+      document.getElementById('email-entry-section').classList.add('hidden');
+      document.getElementById('user-status-section').classList.remove('hidden');
+      document.getElementById('user-info-pill').innerText = user.name + ' (' + user.email + ')';
+
+      if (user.role === 'unknown') {
+        document.getElementById('unregistered-actions').classList.remove('hidden');
+        document.getElementById('registered-actions').classList.add('hidden');
+        document.getElementById('pin-entry-section').classList.add('hidden');
+        document.getElementById('pin-setup-section').classList.add('hidden');
+      } else if (needsPinSetup) {
+        document.getElementById('pin-setup-section').classList.remove('hidden');
+        document.getElementById('pin-entry-section').classList.add('hidden');
+        document.getElementById('registered-actions').classList.add('hidden');
+        document.getElementById('unregistered-actions').classList.add('hidden');
+      } else if (requiresPin) {
+        document.getElementById('pin-entry-section').classList.remove('hidden');
+        document.getElementById('pin-setup-section').classList.add('hidden');
+        document.getElementById('registered-actions').classList.add('hidden');
+        document.getElementById('unregistered-actions').classList.add('hidden');
+        document.getElementById('login-pin').focus();
+      } else {
+        showRegisteredActions(user);
+      }
+    }
+
+    function setupPin() {
+      const pin = document.getElementById('new-pin').value.trim();
+      if (pin.length < 4) {
+        alert('暗証番号は4桁以上で設定してください。');
+        return;
+      }
+
+      const btn = document.getElementById('setup-btn');
+      btn.disabled = true;
+      btn.innerText = '設定中...';
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false;
+          btn.innerText = '設定を完了してログイン';
+          if (res.success) {
+            alert('暗証番号を設定しました。');
+            // PIN設定成功後、設定したPINで認証を実行
+            google.script.run
+              .withSuccessHandler(function (verifyRes) {
+                if (verifyRes.success && verifyRes.user) {
+                  showRegisteredActions(verifyRes.user);
+                } else {
+                  alert('認証に失敗しました。再度ログインしてください。');
+                }
+              })
+              .verifyUserPin(currentEmail, pin);
+          } else {
+            alert(res.error);
+          }
+        })
+        .withFailureHandler(function () {
+          btn.disabled = false;
+          btn.innerText = '設定を完了してログイン';
+          alert('設定エラーが発生しました。');
+        })
+        .updateUserPin(currentEmail, pin);
+    }
+
+    function submitPin() {
+      const pin = document.getElementById('login-pin').value;
+      if (!pin) return;
+
+      const btn = document.getElementById('pin-btn');
+      btn.disabled = true;
+      btn.innerText = '認証中...';
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          btn.disabled = false;
+          btn.innerText = '認証してログイン';
+          if (res.success && res.user) {
+            // verifyUserPinが直接userを返すので、再呼び出し不要
+            showRegisteredActions(res.user);
+          } else {
+            alert(res.error || '認証に失敗しました。');
+            document.getElementById('login-pin').value = '';
+          }
+        })
+        .withFailureHandler(function () {
+          btn.disabled = false;
+          btn.innerText = '認証してログイン';
+          alert('認証エラーが発生しました。');
+        })
+        .verifyUserPin(currentEmail, pin);
+    }
+
+    function showRegisteredActions(user) {
+      document.getElementById('pin-entry-section').classList.add('hidden');
+      document.getElementById('pin-setup-section').classList.add('hidden');
+      document.getElementById('unregistered-actions').classList.add('hidden');
+      document.getElementById('registered-actions').classList.remove('hidden');
+
+      const baseUrl = '<?= baseUrl ?>';
+      const adminLink = document.getElementById('admin-link');
+      const parentLink = document.getElementById('parent-link');
+
+      adminLink.classList.add('hidden');
+      parentLink.classList.add('hidden');
+
+      // セキュリティ強化: URLに email= を付けない（キャッシュで管理）
+      if (user.role === 'admin' || user.role === 'staff') {
+        adminLink.classList.remove('hidden');
+        adminLink.href = baseUrl + '?page=admin';
+      }
+      if (user.role === 'parent' || user.role === 'admin') {
+        parentLink.classList.remove('hidden');
+        parentLink.href = baseUrl + '?page=parent';
+      }
+    }
+
+    function resetLoginForm() {
+      document.getElementById('user-status-section').classList.add('hidden');
+      document.getElementById('registered-actions').classList.add('hidden');
+      document.getElementById('unregistered-actions').classList.add('hidden');
+      document.getElementById('pin-entry-section').classList.add('hidden');
+      document.getElementById('pin-setup-section').classList.add('hidden');
+      document.getElementById('admin-link').classList.add('hidden');
+      document.getElementById('parent-link').classList.add('hidden');
+      document.getElementById('email-entry-section').classList.remove('hidden');
+      document.getElementById('login-pin').value = '';
+      document.getElementById('new-pin').value = '';
+    }
+
+    function requestRegistration() {
+      const btn = document.getElementById('request-btn');
+      btn.disabled = true;
+      btn.innerText = '申請送信中...';
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res.success) {
+            document.getElementById('user-status-section').classList.add('hidden');
+            if (res.message) {
+              document.getElementById('success-msg-text').innerText = res.message;
+            }
+            document.getElementById('request-success').classList.remove('hidden');
+          } else {
+            alert('エラー: ' + res.error);
+            btn.disabled = false;
+            btn.innerText = '📝 登録を申請する';
+          }
+        })
+        .withFailureHandler(function (e) {
+          alert('環境エラーが発生しました。');
+          btn.disabled = false;
+          btn.innerText = '📝 登録を申請する';
+        })
+        .sendRegistrationRequest(); // getCurrentUser(forcedEmail) inside handles it if session exists
+    }
+  </script>
 </body>
 
 </html>

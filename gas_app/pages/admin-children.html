@@ -5,12 +5,13 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>児童管理 - きらきらマネージャー</title>
+    <title>児童管理 - きらきら放課後児童クラブ</title>
     <?!= include('pages/style'); ?>
 </head>
 
 <body>
     <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <?!= include('pages/utils'); ?>
     <div class="container mt-2">
         <h1 style="font-size:1.25rem; color:var(--primary-text);">👦 児童管理</h1>
 
@@ -18,6 +19,8 @@
             <div class="d-flex justify-between align-center mb-4">
                 <h2 style="font-size:1rem; margin:0;">児童一覧</h2>
                 <div class="d-flex gap-2">
+                    <button class="btn-outline" onclick="syncChildren()" id="sync-btn"
+                        style="padding:0.25rem 0.6rem; font-size:0.8rem;">🔄 カレンダーと同期</button>
                     <input type="text" id="search-input" placeholder="名前で検索" oninput="filterTable()"
                         style="max-width:150px; padding:0.25rem 0.5rem; font-size:0.875rem;">
                 </div>
@@ -34,14 +37,7 @@
     <script>
         let allChildren = [];
 
-        function showToast(msg, isError = false) {
-            const c = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast' + (isError ? ' error' : '');
-            t.innerText = msg;
-            c.appendChild(t);
-            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
-        }
+        // showToast is now in utils.html
 
         window.onload = function () {
             google.script.run
@@ -61,12 +57,15 @@
         function renderTable(kids) {
             const c = document.getElementById('children-container');
             if (!kids.length) { c.innerHTML = '<p class="text-muted">データがありません</p>'; return; }
+            const baseUrl = '<?= baseUrl ?>';
             c.innerHTML = `<table>
                 <thead><tr><th>ID</th><th>学年</th><th>氏名</th><th>フリガナ</th><th>帰宅方法</th><th>おやつ</th></tr></thead>
                 <tbody>${kids.map(k => `<tr>
                     <td style="font-size:0.75rem; color:var(--text-muted);">${k.id}</td>
                     <td>${k.grade}年</td>
-                    <td class="font-bold">${k.name}</td>
+                    <td class="font-bold">
+                        <a href="#" onclick="window.top.location.href='${baseUrl}?page=parent&childId=${k.id}'; return false;" style="color:var(--primary-text); text-decoration:underline;">${k.name}</a>
+                    </td>
                     <td style="font-size:0.8rem;">${k.kana || '-'}</td>
                     <td style="font-size:0.8rem;">${k.returnMethod || '-'}</td>
                     <td>
@@ -86,6 +85,30 @@
                 })
                 .withFailureHandler(function (e) { showToast('エラー: ' + e.message, true); })
                 .toggleChildSnack(childId, hasSnack);
+        }
+
+        function syncChildren() {
+            const btn = document.getElementById('sync-btn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '同期中...';
+
+            google.script.run
+                .withSuccessHandler(function (r) {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                    if (r.success) {
+                        showToast(`同期完了: ${r.count}名の児童を更新しました`);
+                    } else {
+                        showToast('同期エラー: ' + r.error, true);
+                    }
+                })
+                .withFailureHandler(function (e) {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                    showToast('サーバーエラー: ' + e.message, true);
+                })
+                .syncScheduleSheetChildren();
         }
     </script>
 </body>

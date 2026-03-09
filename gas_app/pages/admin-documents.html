@@ -5,12 +5,13 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>おたより管理 - きらきらマネージャー</title>
+    <title>おたより管理 - きらきら放課後児童クラブ</title>
     <?!= include('pages/style'); ?>
 </head>
 
 <body>
-    <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <?!= include('pages/navigation', {user: user, urlParams: user.role && user.role !== 'parent' ? urlParams : {}}); ?>
+    <?!= include('pages/utils'); ?>
     <div class="container mt-2">
         <h1 style="font-size:1.25rem; color:var(--primary-text);">📄 おたより管理</h1>
 
@@ -19,9 +20,11 @@
             <h2 style="font-size:1rem; margin-top:0;">新規追加</h2>
             <input type="text" id="doc-title" placeholder="タイトル" class="mb-3">
             <select id="doc-category" class="mb-3">
-                <option value="news">お知らせ</option>
-                <option value="event">イベント</option>
-                <option value="other">その他</option>
+                <? (systemSettings.docCategories || ['お知らせ', '行事', 'その他']).forEach(function(c) { ?>
+                <option value="<?= c ?>">
+                    <?= c ?>
+                </option>
+                <? }) ?>
             </select>
             <input type="url" id="doc-url" placeholder="URL（外部リンク）" class="mb-3">
             <button class="btn-primary" onclick="addDoc()" style="width:100%;">追加する</button>
@@ -38,14 +41,7 @@
     <div id="toast-container"></div>
 
     <script>
-        function showToast(msg, isError = false) {
-            const c = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast' + (isError ? ' error' : '');
-            t.innerText = msg;
-            c.appendChild(t);
-            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
-        }
+        // showToast is now in utils.html
 
         window.onload = loadDocs;
 
@@ -59,11 +55,11 @@
         function renderDocs(docs) {
             const c = document.getElementById('docs-list');
             if (!docs.length) { c.innerHTML = '<p class="text-muted">おたよりはありません</p>'; return; }
-            const catLabel = { news: 'お知らせ', event: 'イベント', other: 'その他' };
+            const catLabel = {}; // No longer needed for mapping if we use the value directly
             c.innerHTML = docs.map(d => `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; border-bottom:1px solid var(--border-color);">
                     <div>
-                        <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-right:6px; font-size:0.7rem;">${catLabel[d.category] || d.category}</span>
+                        <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-right:6px; font-size:0.7rem;">${d.category}</span>
                         <span class="font-bold">${d.title}</span>
                         ${d.url ? `<br><a href="${d.url}" target="_top" style="font-size:0.75rem; color:var(--primary-text); text-decoration:none;">🔗 ${d.url.substring(0, 40)}...</a>` : ''}
                     </div>

@@ -5,12 +5,13 @@
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>金銭管理 - きらきらマネージャー</title>
+    <title>金銭管理 - きらきら放課後児童クラブ</title>
     <?!= include('pages/style'); ?>
 </head>
 
 <body>
     <?!= include('pages/navigation', {user: user, urlParams: urlParams}); ?>
+    <?!= include('pages/utils'); ?>
     <div class="container mt-2">
         <h1 style="font-size:1.25rem; color:var(--primary-text);">💴 金銭管理</h1>
 
@@ -30,14 +31,7 @@
     <div id="toast-container"></div>
 
     <script>
-        function showToast(msg, isError = false) {
-            const c = document.getElementById('toast-container');
-            const t = document.createElement('div');
-            t.className = 'toast' + (isError ? ' error' : '');
-            t.innerText = msg;
-            c.appendChild(t);
-            setTimeout(() => { t.classList.add('fade-out'); setTimeout(() => t.remove(), 500); }, 3000);
-        }
+        // showToast is now in utils.html
 
         window.onload = function () {
             google.script.run

@@ -1,9 +1,9 @@
 <? var _baseUrl = ScriptApp.getService().getUrl(); ?>
 <nav class="nav-bar">
     <div class="container d-flex justify-between align-center">
-        <div class="nav-brand">きらきら🌟</div>
+        <a href="<?= _baseUrl ?>" class="nav-brand" style="text-decoration: none;">きらきら🌟</a>
         <div class="nav-links d-flex gap-4">
-            <? if (user.role === 'admin' || user.role === 'staff') { ?>
+            <? if ((user.role === 'admin' || user.role === 'staff') && urlParams.page !== 'parent') { ?>
             <a href="<?= _baseUrl ?>"
                 class="nav-link <?= (!urlParams.page || urlParams.page === 'admin') ? 'active' : '' ?>">📊 ダッシュボード</a>
             <a href="<?= _baseUrl ?>?page=reservations"
@@ -19,13 +19,92 @@
                 class="nav-link <?= urlParams.page === 'settings'  ? 'active' : '' ?>">⚙️ 設定</a>
             <? } ?>
             <? } ?>
-            <? if (user.role === 'parent') { ?>
-            <a href="<?= _baseUrl ?>?page=parent" class="nav-link <?= urlParams.page === 'parent' ? 'active' : '' ?>">🏠
-                ホーム</a>
+            <? if (user.role === 'parent' || urlParams.page === 'parent') { ?>
+            <!-- Menu hidden for parents (or admin viewing parent page) -->
+            <span style="color:var(--text-muted); font-size:0.8rem;">
+                <?= user.email ?>
+            </span>
             <? } ?>
+            <a href="javascript:void(0)" onclick="openPinModal()" class="nav-link"
+                style="color:var(--text-muted); font-size:0.75rem;">🔑 PIN変更</a>
         </div>
     </div>
 </nav>
+
+<!-- PIN Change Modal -->
+<div id="pin-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+        <h3 style="margin-top:0; font-size:1rem;">🔒 暗証番号の変更</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">新しい暗証番号（4桁以上）を入力してください。</p>
+        <input type="password" id="modal-new-pin" placeholder="****" inputmode="numeric"
+            style="width:100%; padding:0.75rem; border:1px solid #e2e8f0; border-radius:12px; font-size:1.5rem; text-align:center; letter-spacing:0.5rem; margin-bottom:1.5rem;">
+        <div style="display:flex; gap:0.75rem;">
+            <button onclick="changeUserPin()" class="nav-link active" id="modal-pin-btn"
+                style="flex:1; border:none; cursor:pointer; padding:0.75rem;">更新する</button>
+            <button onclick="closePinModal()" class="nav-link"
+                style="flex:1; border:1px solid #e2e8f0; background:none; cursor:pointer; padding:0.75rem;">戻る</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 20px;
+        width: 90%;
+        max-width: 340px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    .hidden {
+        display: none !important;
+    }
+</style>
+
+<script>
+    function openPinModal() {
+        document.getElementById('pin-modal').classList.remove('hidden');
+        document.getElementById('modal-new-pin').focus();
+    }
+    function closePinModal() {
+        document.getElementById('pin-modal').classList.add('hidden');
+        document.getElementById('modal-new-pin').value = '';
+    }
+    function changeUserPin() {
+        const pin = document.getElementById('modal-new-pin').value.trim();
+        if (pin.length < 4) { alert('4桁以上で入力してください。'); return; }
+
+        const btn = document.getElementById('modal-pin-btn');
+        btn.disabled = true; btn.innerText = '更新中...';
+
+        google.script.run
+            .withSuccessHandler(function (res) {
+                btn.disabled = false; btn.innerText = '更新する';
+                if (res.success) {
+                    alert('暗証番号を更新しました。');
+                    closePinModal();
+                } else {
+                    alert(res.error);
+                }
+            })
+            .updateUserPin('<?= user.email ?>', pin);
+    }
+</script>
 
 <style>
     .nav-bar {
@@ -66,17 +145,21 @@
 
     @media (max-width: 600px) {
         .nav-links {
-            gap: 0.2rem;
+            gap: 0.4rem;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 2px;
         }
 
         .nav-link {
-            font-size: 0.7rem;
-            padding: 0.3rem 0.4rem;
+            font-size: 0.75rem;
+            padding: 0.3rem 0.5rem;
         }
 
         .nav-brand {
-            display: none;
+            font-size: 1rem;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
         }
     }
 </style>
